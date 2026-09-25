@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { mockCinematicShots as initialShots } from '@/lib/mock-data';
+import { useState, useEffect } from 'react';
+import { getCinematicDB, saveCinematicDB } from '@/lib/poses-db-helpers';
 import { CinematicShot } from '@/lib/types';
+import { EVENTS } from '@/lib/constants';
 
 // SVG Icons
 const PlusIcon = () => (
@@ -28,13 +29,6 @@ const TrashIcon = () => (
   </svg>
 );
 
-const VideoIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#D4AF37', marginBottom: '6px' }}>
-    <path d="M23 7l-7 5 7 5V7z"></path>
-    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-  </svg>
-);
-
 const XIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -43,7 +37,7 @@ const XIcon = () => (
 );
 
 export default function AdminCinematic() {
-  const [shots, setShots] = useState<CinematicShot[]>(initialShots);
+  const [shots, setShots] = useState<CinematicShot[]>([]);
   const [showForm, setShowForm] = useState(false);
 
   // Form State
@@ -51,581 +45,285 @@ export default function AdminCinematic() {
   const [description, setDescription] = useState('');
   const [cameraMovement, setCameraMovement] = useState('');
   const [framing, setFraming] = useState('');
-  const [event, setEvent] = useState('');
+  const [event, setEvent] = useState('Mehndi');
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [tagsInput, setTagsInput] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
 
   // Editing State
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  useEffect(() => {
+    setShots(getCinematicDB());
+  }, []);
+
   const resetForm = () => {
     setTitle('');
     setDescription('');
     setCameraMovement('');
     setFraming('');
-    setEvent('');
+    setEvent('Mehndi');
+    setOrientation('portrait');
     setTagsInput('');
     setMediaUrl('');
-  };
-
-  const handleAddShot = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return alert('Title is required');
-
-    const newShot: CinematicShot = {
-      id: `cs_${Date.now()}`,
-      title: title.trim(),
-      description: description.trim(),
-      camera_movement: cameraMovement.trim() || undefined,
-      framing: framing.trim() || undefined,
-      event: event || undefined,
-      tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
-      media_url: mediaUrl || undefined,
-      created_at: new Date().toISOString()
-    };
-
-    setShots([newShot, ...shots]);
-    resetForm();
-    setShowForm(false);
-  };
-
-  const handleUpdateShot = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return alert('Title is required');
-
-    setShots(shots.map(s => s.id === editingId ? {
-      ...s,
-      title: title.trim(),
-      description: description.trim(),
-      camera_movement: cameraMovement.trim() || undefined,
-      framing: framing.trim() || undefined,
-      event: event || undefined,
-      tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
-      media_url: mediaUrl || undefined,
-    } : s));
-
     setEditingId(null);
-    resetForm();
-    setShowForm(false);
   };
 
-  const startEdit = (shot: CinematicShot) => {
+  const handleOpenAdd = () => {
+    resetForm();
+    setShowForm(true);
+  };
+
+  const handleEdit = (shot: CinematicShot) => {
     setEditingId(shot.id);
     setTitle(shot.title);
     setDescription(shot.description);
     setCameraMovement(shot.camera_movement || '');
     setFraming(shot.framing || '');
-    setEvent(shot.event || '');
-    setTagsInput(shot.tags.join(', '));
+    setEvent(shot.event || 'Mehndi');
+    setOrientation(shot.orientation || 'portrait');
+    setTagsInput(shot.tags ? shot.tags.join(', ') : '');
     setMediaUrl(shot.media_url || '');
     setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const deleteShot = (id: string) => {
-    if (confirm('Are you sure you want to delete this cinematic shot list item?')) {
-      setShots(shots.filter(s => s.id !== id));
+  const handleDelete = (id: string) => {
+    if (confirm('Are you sure you want to delete this cinematic shot?')) {
+      const updated = shots.filter(s => s.id !== id);
+      setShots(updated);
+      saveCinematicDB(updated);
     }
   };
 
-  const simulateMockVideoUpload = () => {
-    // Simulate setting a video URL path
-    setMediaUrl('/videos/sample-ref.mp4');
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return alert('Title is required');
+
+    const tagsArray = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
+
+    let updated: CinematicShot[];
+
+    if (editingId) {
+      updated = shots.map(s => s.id === editingId ? {
+        ...s,
+        title: title.trim(),
+        description: description.trim(),
+        camera_movement: cameraMovement.trim() || undefined,
+        framing: framing.trim() || undefined,
+        event: event || undefined,
+        orientation,
+        tags: tagsArray,
+        media_url: mediaUrl.trim() || undefined
+      } : s);
+    } else {
+      const newShot: CinematicShot = {
+        id: `cs_${Date.now()}`,
+        title: title.trim(),
+        description: description.trim(),
+        camera_movement: cameraMovement.trim() || undefined,
+        framing: framing.trim() || undefined,
+        event: event || undefined,
+        orientation,
+        tags: tagsArray,
+        media_url: mediaUrl.trim() || 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800',
+        created_at: new Date().toISOString()
+      };
+      updated = [newShot, ...shots];
+    }
+
+    setShots(updated);
+    saveCinematicDB(updated);
+    setShowForm(false);
+    resetForm();
   };
 
   return (
-    <div style={styles.page}>
-      {/* Header */}
-      <div style={styles.header}>
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff' }}>
+      {/* Page Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
-          <h1 style={styles.title}>Cinematic Shots Management</h1>
-          <p style={styles.subtitle}>Curate videography directives, gimbal motions, framing, and drone cues for weddings</p>
+          <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>
+            Cinematic Shots Management
+          </h1>
+          <p style={{ fontSize: '13px', color: '#aaa', margin: '4px 0 0 0' }}>
+            Manage video movement guides and positioning framing for wedding films
+          </p>
         </div>
-        <button 
-          onClick={() => {
-            if (editingId) {
-              setEditingId(null);
-              resetForm();
-            }
-            setShowForm(!showForm);
-          }}
-          style={{
-            ...styles.addBtn,
-            backgroundColor: showForm && !editingId ? '#ef4444' : '#D4AF37',
-            color: showForm && !editingId ? '#fff' : '#000',
-          }}
-        >
-          {showForm && !editingId ? (
-            <>
-              <XIcon /> Cancel
-            </>
-          ) : (
-            <>
-              <PlusIcon /> Add Cinematic Shot
-            </>
-          )}
+        <button onClick={handleOpenAdd} style={{ backgroundColor: '#D4AF37', color: '#000', padding: '10px 18px', borderRadius: '8px', fontWeight: '700', fontSize: '13px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+          <PlusIcon /> Add Cinematic Shot
         </button>
       </div>
 
-      {/* Add/Edit Form */}
+      {/* Grid of Cinematic Shots */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+        {shots.map((shot) => {
+          const isPortrait = (shot.orientation || 'portrait') === 'portrait';
+          return (
+            <div key={shot.id} style={{ backgroundColor: '#111118', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              {/* Aspect Ratio Video Framing Container */}
+              <div style={{
+                position: 'relative',
+                width: '100%',
+                paddingTop: isPortrait ? '135%' : '56.25%', // 9:16 portrait vs 16:9 landscape
+                backgroundColor: '#0a0a0f',
+                overflow: 'hidden'
+              }}>
+                <img 
+                  src={shot.media_url || 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800'} 
+                  alt={shot.title} 
+                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+                <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: '6px' }}>
+                  {shot.event && (
+                    <span style={{ backgroundColor: '#D4AF37', color: '#000', padding: '3px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+                      {shot.event}
+                    </span>
+                  )}
+                  <span style={{ background: 'rgba(0,0,0,0.7)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', padding: '3px 8px', borderRadius: '4px', fontSize: '10px' }}>
+                    {isPortrait ? '📱 Portrait (9:16)' : '🖥️ Landscape (16:9)'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Info Body */}
+              <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <h3 style={{ margin: '0 0 6px 0', fontSize: '15px', color: '#fff', fontWeight: 'bold' }}>{shot.title}</h3>
+                  <p style={{ margin: '0 0 12px 0', fontSize: '12px', color: '#aaa', lineHeight: '1.4' }}>{shot.description}</p>
+                  
+                  {shot.camera_movement && (
+                    <div style={{ fontSize: '11px', color: '#D4AF37', marginBottom: '4px' }}>
+                      📹 Movement: {shot.camera_movement}
+                    </div>
+                  )}
+                  {shot.framing && (
+                    <div style={{ fontSize: '11px', color: '#888', marginBottom: '10px' }}>
+                      📐 Framing: {shot.framing}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '12px' }}>
+                  <button onClick={() => handleEdit(shot)} style={{ background: 'transparent', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.2)', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <EditIcon />
+                  </button>
+                  <button onClick={() => handleDelete(shot.id)} style={{ background: 'transparent', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <TrashIcon />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Modal Form */}
       {showForm && (
-        <div style={styles.formCard}>
-          <h2 style={styles.formHeader}>
-            {editingId ? 'Edit Cinematic Shot' : 'New Cinematic Shot'}
-          </h2>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#111118', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px', padding: '24px', maxWidth: '440px', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 'bold', color: '#D4AF37', margin: 0 }}>
+                {editingId ? 'Edit Cinematic Shot' : 'Add New Cinematic Shot'}
+              </h2>
+              <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer' }}>
+                <XIcon />
+              </button>
+            </div>
 
-          <form onSubmit={editingId ? handleUpdateShot : handleAddShot} style={styles.formBody}>
-            <div style={styles.grid2}>
-              {/* Media Upload Simulation Area */}
-              <div 
-                onClick={simulateMockVideoUpload}
-                style={{
-                  ...styles.uploadArea,
-                  borderColor: mediaUrl ? '#D4AF37' : 'rgba(255,255,255,0.12)',
-                  backgroundColor: mediaUrl ? 'rgba(212,175,55,0.03)' : '#0a0a0f',
-                }}
-              >
-                <div style={{ textAlign: 'center' }}>
-                  <VideoIcon />
-                  <p style={{ margin: 0, fontSize: '13px', color: '#aaa', fontWeight: '500' }}>
-                    {mediaUrl ? 'Reference Video Linked' : 'Upload Video Reference'}
-                  </p>
-                  <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#666' }}>
-                    {mediaUrl ? 'Click to re-select reference' : 'Click to simulate video attachment'}
-                  </p>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#aaa', marginBottom: '4px', textTransform: 'uppercase' }}>Shot Title</label>
+                <input 
+                  type="text" 
+                  value={title} 
+                  onChange={e => setTitle(e.target.value)} 
+                  placeholder="e.g. Slow Motion Groom Entry Orbit" 
+                  required 
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#aaa', marginBottom: '4px', textTransform: 'uppercase' }}>Event Category</label>
+                  <select 
+                    value={event} 
+                    onChange={e => setEvent(e.target.value)}
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
+                  >
+                    {EVENTS.map(ev => (
+                      <option key={ev} value={ev}>{ev}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#aaa', marginBottom: '4px', textTransform: 'uppercase' }}>Video Positioning</label>
+                  <select 
+                    value={orientation} 
+                    onChange={e => setOrientation(e.target.value as any)}
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
+                  >
+                    <option value="portrait">📱 Portrait Reel (9:16 Vertical)</option>
+                    <option value="landscape">🖥️ Landscape Film (16:9 Horizontal)</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Form Input Fields */}
-              <div style={styles.inputsColumn}>
-                <div>
-                  <label style={styles.inputLabel}>Title <span style={{ color: '#ef4444' }}>*</span></label>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#aaa', marginBottom: '4px', textTransform: 'uppercase' }}>Camera Movement & Framing</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <input 
                     type="text" 
-                    placeholder="e.g. Grand Entrance Dolly Shot" 
-                    value={title}
-                    onChange={e => setTitle(e.target.value)}
-                    style={styles.input}
-                    required
+                    value={cameraMovement} 
+                    onChange={e => setCameraMovement(e.target.value)} 
+                    placeholder="Movement e.g. Gimbal Orbit" 
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
                   />
-                </div>
-                <div>
-                  <label style={styles.inputLabel}>Description <span style={{ color: '#ef4444' }}>*</span></label>
                   <input 
                     type="text" 
-                    placeholder="e.g. Track groom's steps from lower angle, capturing crowd expressions in background" 
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    style={styles.input}
-                    required
+                    value={framing} 
+                    onChange={e => setFraming(e.target.value)} 
+                    placeholder="Framing e.g. Close Up 50mm" 
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
                   />
                 </div>
-
-                <div style={styles.grid2}>
-                  <div>
-                    <label style={styles.inputLabel}>Camera Movement</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Gimbal Walk / Pan / Drone Sweep" 
-                      value={cameraMovement}
-                      onChange={e => setCameraMovement(e.target.value)}
-                      style={styles.input}
-                    />
-                  </div>
-                  <div>
-                    <label style={styles.inputLabel}>Framing</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Medium Wide / Close-up" 
-                      value={framing}
-                      onChange={e => setFraming(e.target.value)}
-                      style={styles.input}
-                    />
-                  </div>
-                </div>
-
-                <div style={styles.grid2}>
-                  <div>
-                    <label style={styles.inputLabel}>Event</label>
-                    <select 
-                      value={event}
-                      onChange={e => setEvent(e.target.value)}
-                      style={styles.select}
-                    >
-                      <option value="">Select Event</option>
-                      <option value="Mehndi">Mehndi</option>
-                      <option value="Nikah">Nikah</option>
-                      <option value="Barat">Barat</option>
-                      <option value="Walima">Walima</option>
-                      <option value="Reception">Reception</option>
-                      <option value="General">General</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={styles.inputLabel}>Tags (comma separated)</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Slow Motion, Entry" 
-                      value={tagsInput}
-                      onChange={e => setTagsInput(e.target.value)}
-                      style={styles.input}
-                    />
-                  </div>
-                </div>
-
               </div>
-            </div>
 
-            <div style={styles.formFooter}>
-              <button 
-                type="button" 
-                onClick={() => {
-                  resetForm();
-                  setEditingId(null);
-                  setShowForm(false);
-                }} 
-                style={styles.cancelBtn}
-              >
-                Cancel
-              </button>
-              <button type="submit" style={styles.saveBtn}>
-                {editingId ? 'Update Cinematic Shot' : 'Save Cinematic Shot'}
-              </button>
-            </div>
-          </form>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#aaa', marginBottom: '4px', textTransform: 'uppercase' }}>Media / Video Thumbnail URL</label>
+                <input 
+                  type="url" 
+                  value={mediaUrl} 
+                  onChange={e => setMediaUrl(e.target.value)} 
+                  placeholder="https://images.unsplash.com/photo..." 
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#aaa', marginBottom: '4px', textTransform: 'uppercase' }}>Instructions / Description</label>
+                <textarea 
+                  value={description} 
+                  onChange={e => setDescription(e.target.value)} 
+                  placeholder="Describe camera movement and speed..." 
+                  rows={2}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setShowForm(false)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#aaa', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}>
+                  Cancel
+                </button>
+                <button type="submit" style={{ background: '#D4AF37', border: 'none', color: '#000', padding: '10px 22px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
+                  Save Shot
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
-
-      {/* Table List of Cinematic Shots */}
-      <div style={styles.tableCard}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={styles.table}>
-            <thead>
-              <tr style={styles.theadRow}>
-                <th style={{ ...styles.th, width: '90px' }}>Reference</th>
-                <th style={styles.th}>Cinematic Details</th>
-                <th style={styles.th}>Movement</th>
-                <th style={styles.th}>Framing</th>
-                <th style={styles.th}>Event</th>
-                <th style={styles.th}>Tags</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shots.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={styles.noDataCell}>No cinematic shots configured.</td>
-                </tr>
-              ) : (
-                shots.map((shot) => (
-                  <tr key={shot.id} style={styles.tbodyRow}>
-                    <td style={styles.td}>
-                      <div style={styles.videoBadge}>
-                        <span style={{ fontSize: '18px' }}>🎬</span>
-                        <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#D4AF37', marginTop: '2px' }}>
-                          {shot.media_url ? 'VIDEO' : 'MOCK'}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={styles.td}>
-                      <div style={styles.shotTitle}>{shot.title}</div>
-                      <div style={styles.shotDesc}>{shot.description}</div>
-                    </td>
-                    <td style={styles.td}>
-                      {shot.camera_movement ? (
-                        <span style={styles.techText}>{shot.camera_movement}</span>
-                      ) : (
-                        <span style={{ color: '#555', fontSize: '12px' }}>—</span>
-                      )}
-                    </td>
-                    <td style={styles.td}>
-                      {shot.framing ? (
-                        <span style={styles.techText}>{shot.framing}</span>
-                      ) : (
-                        <span style={{ color: '#555', fontSize: '12px' }}>—</span>
-                      )}
-                    </td>
-                    <td style={styles.td}>
-                      {shot.event ? (
-                        <span style={styles.eventBadge}>{shot.event}</span>
-                      ) : (
-                        <span style={{ color: '#666', fontSize: '12px' }}>General</span>
-                      )}
-                    </td>
-                    <td style={styles.td}>
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {shot.tags.map(t => (
-                          <span key={t} style={styles.tagBadge}>#{t}</span>
-                        ))}
-                      </div>
-                    </td>
-                    <td style={{ ...styles.td, textAlign: 'right' }}>
-                      <div style={styles.actionGroup}>
-                        <button onClick={() => startEdit(shot)} style={styles.actionBtnBlue} title="Edit">
-                          <EditIcon />
-                        </button>
-                        <button onClick={() => deleteShot(shot.id)} style={styles.actionBtnRed} title="Delete">
-                          <TrashIcon />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#fff',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '28px',
-  },
-  title: {
-    fontSize: '24px',
-    fontWeight: '700',
-    color: '#fff',
-    margin: 0,
-    letterSpacing: '-0.5px',
-  },
-  subtitle: {
-    fontSize: '13px',
-    color: '#aaa',
-    margin: '4px 0 0 0',
-  },
-  addBtn: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    border: 'none',
-    padding: '10px 16px',
-    borderRadius: '8px',
-    fontWeight: '600',
-    fontSize: '13px',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-  },
-  formCard: {
-    backgroundColor: '#111118',
-    border: '1px solid rgba(255,255,255,0.06)',
-    borderRadius: '12px',
-    padding: '24px',
-    marginBottom: '28px',
-  },
-  formHeader: {
-    fontSize: '16px',
-    fontWeight: '700',
-    color: '#fff',
-    margin: '0 0 16px 0',
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
-    paddingBottom: '12px',
-  },
-  formBody: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-  },
-  grid2: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-    gap: '20px',
-  },
-  uploadArea: {
-    border: '2px dashed',
-    borderRadius: '8px',
-    height: '100%',
-    minHeight: '180px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    backgroundColor: '#0a0a0f',
-    transition: 'border-color 0.2s',
-  },
-  inputsColumn: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-    justifyContent: 'center',
-  },
-  inputLabel: {
-    display: 'block',
-    fontSize: '11px',
-    fontWeight: '600',
-    color: '#aaa',
-    marginBottom: '6px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-  input: {
-    width: '100%',
-    backgroundColor: '#0a0a0f',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '8px',
-    padding: '10px 12px',
-    color: '#fff',
-    fontSize: '13px',
-    outline: 'none',
-    boxSizing: 'border-box',
-  },
-  select: {
-    width: '100%',
-    backgroundColor: '#0a0a0f',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '8px',
-    padding: '9px 12px',
-    color: '#fff',
-    fontSize: '13px',
-    outline: 'none',
-    boxSizing: 'border-box',
-    height: '38px',
-  },
-  formFooter: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: '12px',
-    borderTop: '1px solid rgba(255,255,255,0.06)',
-    paddingTop: '16px',
-    marginTop: '8px',
-  },
-  cancelBtn: {
-    backgroundColor: 'transparent',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px',
-    padding: '10px 20px',
-    color: '#aaa',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  saveBtn: {
-    backgroundColor: '#D4AF37',
-    color: '#000',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '10px 24px',
-    fontSize: '13px',
-    fontWeight: '700',
-    cursor: 'pointer',
-  },
-  tableCard: {
-    backgroundColor: '#111118',
-    border: '1px solid rgba(255,255,255,0.06)',
-    borderRadius: '12px',
-    overflow: 'hidden',
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '14px',
-    textAlign: 'left',
-  },
-  theadRow: {
-    backgroundColor: '#0d0d14',
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
-  },
-  th: {
-    padding: '14px 16px',
-    color: '#aaa',
-    fontSize: '12px',
-    fontWeight: '600',
-    letterSpacing: '0.5px',
-  },
-  tbodyRow: {
-    borderBottom: '1px solid rgba(255,255,255,0.04)',
-    transition: 'background-color 0.2s',
-  },
-  td: {
-    padding: '14px 16px',
-    verticalAlign: 'middle',
-  },
-  videoBadge: {
-    width: '56px',
-    height: '56px',
-    borderRadius: '6px',
-    backgroundColor: '#0d0d14',
-    border: '1px solid rgba(255,255,255,0.06)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shotTitle: {
-    fontWeight: '600',
-    color: '#fff',
-    fontSize: '14px',
-    marginBottom: '2px',
-  },
-  shotDesc: {
-    color: '#aaa',
-    fontSize: '12px',
-    lineHeight: '1.4',
-    maxWidth: '350px',
-  },
-  techText: {
-    color: '#fff',
-    fontSize: '13px',
-    fontWeight: '500',
-  },
-  eventBadge: {
-    fontSize: '11px',
-    backgroundColor: 'rgba(124,58,237,0.08)',
-    color: '#7c3aed',
-    border: '1px solid rgba(124,58,237,0.15)',
-    padding: '2px 8px',
-    borderRadius: '6px',
-    fontWeight: '500',
-  },
-  tagBadge: {
-    fontSize: '10px',
-    color: '#aaa',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    padding: '2px 6px',
-    borderRadius: '4px',
-    border: '1px solid rgba(255,255,255,0.08)',
-  },
-  actionGroup: {
-    display: 'flex',
-    gap: '8px',
-    justifyContent: 'flex-end',
-  },
-  actionBtnBlue: {
-    backgroundColor: 'transparent',
-    color: '#3b82f6',
-    border: '1px solid rgba(59,130,246,0.15)',
-    borderRadius: '6px',
-    width: '28px',
-    height: '28px',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-  },
-  actionBtnRed: {
-    backgroundColor: 'transparent',
-    color: '#ef4444',
-    border: '1px solid rgba(239,68,68,0.15)',
-    borderRadius: '6px',
-    width: '28px',
-    height: '28px',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-  },
-  noDataCell: {
-    textAlign: 'center',
-    padding: '40px',
-    color: '#666',
-    fontSize: '14px',
-  },
-};

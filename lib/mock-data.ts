@@ -1,4 +1,4 @@
-import { Pose, ShotListItem, CinematicShot, ChecklistEvent, ChecklistItem } from './types';
+import { Pose, ShotListItem, CinematicShot, TrendingReel, ChecklistEvent, ChecklistItem } from './types';
 
 const NOW = new Date().toISOString();
 
@@ -422,6 +422,8 @@ export const mockCinematicShots: CinematicShot[] = [
     media_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400',
     camera_movement: 'Pan/Tilt Orbit',
     framing: 'Tight Detail',
+    orientation: 'portrait',
+    status: 'published',
     tags: ['Detail Shot', 'Slow Motion'], 
     created_at: NOW 
   },
@@ -433,8 +435,85 @@ export const mockCinematicShots: CinematicShot[] = [
     media_url: 'https://images.unsplash.com/photo-1606216840879-aa8d2b5b67f0?w=400',
     camera_movement: 'Slow Push In',
     framing: 'Close Up',
+    orientation: 'landscape',
+    status: 'published',
     tags: ['Emotional Moment', 'Detail Shot'], 
     created_at: NOW 
+  },
+];
+
+export const mockTrendingReels: TrendingReel[] = [
+  {
+    id: 'tr1',
+    title: 'Vibrant Mehndi Dance Reel',
+    description: 'Slow motion 9:16 portrait reel capturing the colorful dupatta twirl and yellow flower rain at Mehndi.',
+    video_url: 'https://assets.mixkit.co/videos/preview/mixkit-bride-and-groom-walking-in-a-park-41221-large.mp4',
+    cover_image: 'https://images.unsplash.com/photo-1519741347686-cfcbf6bde2af?w=800',
+    event: 'Mehndi',
+    orientation: 'portrait',
+    status: 'published',
+    tags: ['Mehndi', 'Dance', 'Reel', 'Trending'],
+    created_at: NOW,
+  },
+  {
+    id: 'tr2',
+    title: 'Royal Groom Entry Sequence',
+    description: 'Dramatic 9:16 portrait video of groom arrival with smoke bombs and dhol squad.',
+    video_url: 'https://assets.mixkit.co/videos/preview/mixkit-hands-holding-a-wedding-ring-41223-large.mp4',
+    cover_image: 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?w=800',
+    event: 'Barat',
+    orientation: 'portrait',
+    status: 'published',
+    tags: ['Barat', 'Groom Entry', 'Smoke Bomb'],
+    created_at: NOW,
+  },
+  {
+    id: 'tr3',
+    title: 'Emotional Nikah Mirror Moment',
+    description: 'Intimate portrait reel of the Arsi Mushaf (mirror reflection) tradition.',
+    video_url: 'https://assets.mixkit.co/videos/preview/mixkit-bride-and-groom-walking-in-a-park-41221-large.mp4',
+    cover_image: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800',
+    event: 'Nikah',
+    orientation: 'portrait',
+    status: 'published',
+    tags: ['Nikah', 'Emotional', 'Traditional'],
+    created_at: NOW,
+  },
+  {
+    id: 'tr4',
+    title: 'Walima Cinematic Landscape Teaser',
+    description: 'High-end 16:9 widescreen cinematic film teaser for Walima reception night.',
+    video_url: 'https://assets.mixkit.co/videos/preview/mixkit-bride-and-groom-walking-in-a-park-41221-large.mp4',
+    cover_image: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=800',
+    event: 'Walima',
+    orientation: 'landscape',
+    status: 'published',
+    tags: ['Walima', 'Widescreen', 'Teaser'],
+    created_at: NOW,
+  },
+  {
+    id: 'tr5',
+    title: 'Mayun Ubtan & Dupatta Fest',
+    description: 'Super aesthetic 9:16 vertical reel of yellow outfit Mayun aesthetics.',
+    video_url: 'https://assets.mixkit.co/videos/preview/mixkit-hands-holding-a-wedding-ring-41223-large.mp4',
+    cover_image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800',
+    event: 'Mayun',
+    orientation: 'portrait',
+    status: 'published',
+    tags: ['Mayun', 'Yellow', 'Aesthetic'],
+    created_at: NOW,
+  },
+  {
+    id: 'tr6',
+    title: 'Dholki Night Beats & Singing',
+    description: 'Candid 9:16 reel of family dholki singing circle.',
+    video_url: 'https://assets.mixkit.co/videos/preview/mixkit-bride-and-groom-walking-in-a-park-41221-large.mp4',
+    cover_image: 'https://images.unsplash.com/photo-1525610079773-0ff89f657fd9?w=800',
+    event: 'Dholki',
+    orientation: 'portrait',
+    status: 'published',
+    tags: ['Dholki', 'Family', 'Fun'],
+    created_at: NOW,
   },
 ];
 

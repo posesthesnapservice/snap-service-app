@@ -5,7 +5,10 @@ export const SUBJECTS = ['Bride', 'Groom', 'Couple', 'Sisters', 'Brothers', 'Old
 export const SHOOT_TYPES = ['Solo', 'Couple', 'Portrait', 'Standing', 'Sitting', 'Walking', 'Romantic', 'Creative', 'Editorial', 'Traditional'] as const;
 
 // Events
-export const EVENTS = ['Mehndi', 'Nikah', 'Barat', 'Walima', 'Reception', 'Pre-Wedding', 'General'] as const;
+export const EVENTS = ['Mehndi', 'Nikah', 'Barat', 'Walima', 'Reception', 'Mayun', 'Dholki', 'Pre-Wedding', 'General'] as const;
+
+// Trending Reel Event Categories
+export const REEL_EVENTS = ['All', 'Mehndi', 'Barat', 'Walima', 'Nikah', 'Mayun', 'Dholki', 'Pre-Wedding', 'Engagement', 'General'] as const;
 
 // Moods
 export const MOODS = ['Romantic', 'Candid', 'Editorial', 'Traditional', 'Fun', 'Dramatic', 'Elegant', 'Natural'] as const;
@@ -18,4 +21,4 @@ export const CINEMATIC_TYPES = ['Entry Shot', 'Walking Shot', 'Reveal', 'Detail 
 
 export const USER_ROLES = { ADMIN: 'admin', USER: 'user' } as const;
 
-export const CHECKLIST_EVENTS = ['Mehndi', 'Nikah', 'Barat', 'Walima', 'Reception'] as const;
+export const CHECKLIST_EVENTS = ['Mehndi', 'Nikah', 'Barat', 'Walima', 'Reception', 'Mayun', 'Dholki'] as const;

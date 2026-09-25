@@ -1,9 +1,10 @@
-import { mockPoses, mockShotList, mockCinematicShots } from './mock-data';
-import { Pose, ShotListItem, CinematicShot } from './types';
+import { mockPoses, mockShotList, mockCinematicShots, mockTrendingReels } from './mock-data';
+import { Pose, ShotListItem, CinematicShot, TrendingReel } from './types';
 
 const POSES_KEY = 'snap_poses_db';
 const SHOTLIST_KEY = 'snap_shotlist_db';
 const CINEMATIC_KEY = 'snap_cinematic_db';
+const REELS_KEY = 'snap_trending_reels_db';
 
 // --- POSES DB ---
 export function getPosesDB(): Pose[] {
@@ -96,4 +97,49 @@ export function saveCinematicDB(items: CinematicShot[]): void {
   } catch (e) {
     console.error('Failed to save cinematic DB:', e);
   }
+}
+
+// --- TRENDING REELS DB ---
+export function getTrendingReelsDB(): TrendingReel[] {
+  if (typeof window === 'undefined') return mockTrendingReels;
+  try {
+    const stored = localStorage.getItem(REELS_KEY);
+    if (!stored) {
+      localStorage.setItem(REELS_KEY, JSON.stringify(mockTrendingReels));
+      return mockTrendingReels;
+    }
+    return JSON.parse(stored);
+  } catch {
+    return mockTrendingReels;
+  }
+}
+
+export function saveTrendingReelsDB(items: TrendingReel[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(REELS_KEY, JSON.stringify(items));
+  } catch (e) {
+    console.error('Failed to save trending reels DB:', e);
+  }
+}
+
+export function addTrendingReelDB(newItem: TrendingReel): TrendingReel[] {
+  const current = getTrendingReelsDB();
+  const updated = [newItem, ...current];
+  saveTrendingReelsDB(updated);
+  return updated;
+}
+
+export function updateTrendingReelDB(id: string, partial: Partial<TrendingReel>): TrendingReel[] {
+  const current = getTrendingReelsDB();
+  const updated = current.map(item => item.id === id ? { ...item, ...partial } : item);
+  saveTrendingReelsDB(updated);
+  return updated;
+}
+
+export function deleteTrendingReelDB(id: string): TrendingReel[] {
+  const current = getTrendingReelsDB();
+  const updated = current.filter(item => item.id !== id);
+  saveTrendingReelsDB(updated);
+  return updated;
 }

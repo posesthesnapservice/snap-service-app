@@ -61,10 +61,26 @@ export interface CinematicShot {
   title: string;
   description: string;
   media_url?: string;
+  cover_image?: string;
   camera_movement?: string;
   framing?: string;
   event?: string;
+  orientation?: 'portrait' | 'landscape'; // portrait (9:16) vs landscape (16:9)
+  status?: PoseStatus;
   tags: string[];
+  created_at: string;
+}
+
+export interface TrendingReel {
+  id: string;
+  title: string;
+  description?: string;
+  video_url?: string;
+  cover_image?: string;
+  event: string; // 'Mehndi' | 'Barat' | 'Walima' | 'Nikah' | 'Mayun' | 'Dholki' | 'Pre-Wedding' | 'Engagement' | 'General'
+  orientation: 'portrait' | 'landscape'; // portrait (9:16) vs landscape (16:9)
+  status: PoseStatus;
+  tags?: string[];
   created_at: string;
 }
 
