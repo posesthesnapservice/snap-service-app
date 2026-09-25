@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getTrendingReelsDB, saveTrendingReelsDB, addTrendingReelDB, updateTrendingReelDB, deleteTrendingReelDB } from '@/lib/poses-db-helpers';
+import { getTrendingReelsDB, saveTrendingReelsDB, addTrendingReelDB, updateTrendingReelDB, deleteTrendingReelDB, uploadMediaToSupabase } from '@/lib/poses-db-helpers';
 import { TrendingReel, PoseStatus } from '@/lib/types';
 import { REEL_EVENTS } from '@/lib/constants';
 
@@ -96,24 +96,49 @@ export default function AdminTrendingReels() {
     setShowModal(true);
   };
 
-  const handleVideoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  const handleVideoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadingVideo(true);
+
+    // Try Supabase Storage upload first for cloud sync across all devices
+    const publicUrl = await uploadMediaToSupabase(file, 'reels-videos');
+    if (publicUrl) {
+      setForm(prev => ({ ...prev, video_url: publicUrl }));
+      setUploadingVideo(false);
+      return;
+    }
+
+    // Local Data URL fallback
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
       if (dataUrl) setForm(prev => ({ ...prev, video_url: dataUrl }));
+      setUploadingVideo(false);
     };
     reader.readAsDataURL(file);
   };
 
-  const handleCoverFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadingCover(true);
+
+    const publicUrl = await uploadMediaToSupabase(file, 'reels-covers');
+    if (publicUrl) {
+      setForm(prev => ({ ...prev, cover_image: publicUrl }));
+      setUploadingCover(false);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
       if (dataUrl) setForm(prev => ({ ...prev, cover_image: dataUrl }));
+      setUploadingCover(false);
     };
     reader.readAsDataURL(file);
   };

@@ -1,10 +1,29 @@
 import { mockPoses, mockShotList, mockCinematicShots, mockTrendingReels } from './mock-data';
 import { Pose, ShotListItem, CinematicShot, TrendingReel } from './types';
+import { supabase } from './supabase';
 
 const POSES_KEY = 'snap_poses_db';
 const SHOTLIST_KEY = 'snap_shotlist_db';
 const CINEMATIC_KEY = 'snap_cinematic_db';
 const REELS_KEY = 'snap_trending_reels_db';
+
+// --- SUPABASE STORAGE MEDIA UPLOADER ---
+export async function uploadMediaToSupabase(file: File, folder = 'reels'): Promise<string | null> {
+  try {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const { error } = await supabase.storage.from('snap_media').upload(fileName, file);
+    if (error) {
+      console.error('Supabase Storage error:', error);
+      return null;
+    }
+    const { data: publicUrlData } = supabase.storage.from('snap_media').getPublicUrl(fileName);
+    return publicUrlData.publicUrl;
+  } catch (e) {
+    console.error('Upload exception:', e);
+    return null;
+  }
+}
 
 // --- POSES DB ---
 export function getPosesDB(): Pose[] {
