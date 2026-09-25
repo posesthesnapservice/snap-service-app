@@ -10,7 +10,14 @@ export default function RootPage() {
   useEffect(() => {
     const user = getUser();
     if (user) {
-      router.replace('/home');
+      let targetRoute = user.role === 'admin' ? '/admin' : '/home';
+      try {
+        const saved = localStorage.getItem('snap_last_route');
+        if (saved && saved !== '/login' && saved !== '/') {
+          targetRoute = saved;
+        }
+      } catch (e) {}
+      router.replace(targetRoute);
     } else {
       router.replace('/login');
     }

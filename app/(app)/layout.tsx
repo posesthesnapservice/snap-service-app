@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { getUser } from '../../lib/auth-helpers';
 import BottomNav from '../../components/layout/BottomNav';
 import OfflineBanner from '../../components/layout/OfflineBanner';
@@ -9,6 +9,7 @@ import AppHeader from '../../components/layout/AppHeader';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [authorized, setAuthorized] = useState(false);
   const redirected = useRef(false);
 
@@ -21,7 +22,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     } else {
       setAuthorized(true);
     }
-  }, []); // ← empty deps: run ONCE on mount only
+  }, []);
+
+  // Save last visited screen so closing and reopening app restores it
+  useEffect(() => {
+    if (pathname && pathname !== '/login') {
+      try {
+        localStorage.setItem('snap_last_route', pathname);
+      } catch (e) {}
+    }
+  }, [pathname]);
 
   if (!authorized) {
     return (

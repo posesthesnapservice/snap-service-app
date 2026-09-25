@@ -1,13 +1,17 @@
-const CACHE_NAME = 'snap-service-v1';
+const CACHE_NAME = 'snap-service-v2';
 const PRECACHE_URLS = [
   '/',
   '/home',
   '/poses',
+  '/trending-reels',
   '/shot-list',
   '/cinematic',
   '/dont-miss',
   '/favorites',
-  '/ai-assistant'
+  '/today-shoot',
+  '/profile',
+  '/ai-assistant',
+  '/logo.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -54,39 +58,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for everything else
+  // Cache-first, network fallback for offline reliability
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request).then((fetchResponse) => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, fetchResponse.clone());
-          return fetchResponse;
-        });
+        if (event.request.method === 'GET' && fetchResponse && fetchResponse.status === 200) {
+          const responseToCache = fetchResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return fetchResponse;
+      }).catch(() => {
+        if (event.request.mode === 'navigate') {
+          return caches.match('/home') || caches.match('/');
+        }
       });
     })
   );
 });
 
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-user-data') {
-    event.waitUntil(syncUserData());
-  }
-});
-
-async function syncUserData() {
-  // Sync logic for offline favorites and checklist status
-  console.log('Background sync running for user data');
-}
-
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
-  }
-  if (event.data && event.data.type === 'CACHE_URLS') {
-    event.waitUntil(
-      caches.open(CACHE_NAME).then((cache) => {
-        return cache.addAll(event.data.urls);
-      })
-    );
   }
 });
