@@ -1,14 +1,20 @@
 import { mockPoses, mockShotList, mockCinematicShots, mockTrendingReels } from './mock-data';
 import { Pose, ShotListItem, CinematicShot, TrendingReel } from './types';
 import { supabase } from './supabase';
+import { uploadMediaToCloudinary } from './cloudinary';
 
 const POSES_KEY = 'snap_poses_db';
 const SHOTLIST_KEY = 'snap_shotlist_db';
 const CINEMATIC_KEY = 'snap_cinematic_db';
 const REELS_KEY = 'snap_trending_reels_db';
 
-// --- SUPABASE STORAGE MEDIA UPLOADER ---
+// --- MEDIA UPLOADER (Cloudinary 25GB -> Supabase Fallback) ---
 export async function uploadMediaToSupabase(file: File, folder = 'reels'): Promise<string | null> {
+  // 1. Try Cloudinary if configured (25GB Free Storage)
+  const cloudinaryUrl = await uploadMediaToCloudinary(file);
+  if (cloudinaryUrl) return cloudinaryUrl;
+
+  // 2. Fallback to Supabase Storage
   try {
     const fileExt = file.name.split('.').pop();
     const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
@@ -53,6 +59,21 @@ export function addPoseDB(newPose: Pose): Pose[] {
   const current = getPosesDB();
   const updated = [newPose, ...current];
   savePosesDB(updated);
+  
+  // Async sync to Supabase Database table
+  supabase.from('snap_poses').insert([{
+    id: newPose.id,
+    title: newPose.title,
+    image_url: newPose.image_url,
+    instructions: newPose.instructions || '',
+    subjects: newPose.subjects || [],
+    shoot_types: newPose.shoot_types || [],
+    events: newPose.events || [],
+    status: newPose.status || 'published'
+  }]).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Poses insert) notice:', res.error.message);
+  });
+
   return updated;
 }
 
@@ -60,6 +81,11 @@ export function updatePoseDB(id: string, partial: Partial<Pose>): Pose[] {
   const current = getPosesDB();
   const updated = current.map(p => p.id === id ? { ...p, ...partial, updated_at: new Date().toISOString() } : p);
   savePosesDB(updated);
+
+  supabase.from('snap_poses').update(partial).eq('id', id).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Poses update) notice:', res.error.message);
+  });
+
   return updated;
 }
 
@@ -67,6 +93,11 @@ export function deletePoseDB(id: string): Pose[] {
   const current = getPosesDB();
   const updated = current.filter(p => p.id !== id);
   savePosesDB(updated);
+
+  supabase.from('snap_poses').delete().eq('id', id).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Poses delete) notice:', res.error.message);
+  });
+
   return updated;
 }
 
@@ -146,6 +177,20 @@ export function addTrendingReelDB(newItem: TrendingReel): TrendingReel[] {
   const current = getTrendingReelsDB();
   const updated = [newItem, ...current];
   saveTrendingReelsDB(updated);
+
+  // Async sync to Supabase Database table
+  supabase.from('snap_trending_reels').insert([{
+    id: newItem.id,
+    title: newItem.title,
+    video_url: newItem.video_url || '',
+    cover_url: newItem.cover_image || '',
+    description: newItem.description || '',
+    orientation: newItem.orientation || 'portrait',
+    event: newItem.event || 'General'
+  }]).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Reels insert) notice:', res.error.message);
+  });
+
   return updated;
 }
 
@@ -153,6 +198,11 @@ export function updateTrendingReelDB(id: string, partial: Partial<TrendingReel>)
   const current = getTrendingReelsDB();
   const updated = current.map(item => item.id === id ? { ...item, ...partial } : item);
   saveTrendingReelsDB(updated);
+
+  supabase.from('snap_trending_reels').update(partial).eq('id', id).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Reels update) notice:', res.error.message);
+  });
+
   return updated;
 }
 
@@ -160,5 +210,10 @@ export function deleteTrendingReelDB(id: string): TrendingReel[] {
   const current = getTrendingReelsDB();
   const updated = current.filter(item => item.id !== id);
   saveTrendingReelsDB(updated);
+
+  supabase.from('snap_trending_reels').delete().eq('id', id).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Reels delete) notice:', res.error.message);
+  });
+
   return updated;
 }
