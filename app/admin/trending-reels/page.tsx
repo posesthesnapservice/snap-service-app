@@ -96,6 +96,28 @@ export default function AdminTrendingReels() {
     setShowModal(true);
   };
 
+  const handleVideoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (dataUrl) setForm(prev => ({ ...prev, video_url: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCoverFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (dataUrl) setForm(prev => ({ ...prev, cover_image: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const toggleStatus = (id: string, currentStatus: PoseStatus) => {
     const nextStatus: PoseStatus = currentStatus === 'published' ? 'hidden' : 'published';
     const updated = updateTrendingReelDB(id, { status: nextStatus });
@@ -161,7 +183,7 @@ export default function AdminTrendingReels() {
             🔥 Trending Reels Management
           </h1>
           <p style={{ fontSize: '13px', color: '#aaa', margin: '4px 0 0 0' }}>
-            Post and categorize viral wedding reels (Mehndi, Barat, Walima, Nikah, Mayun, Dholki)
+            Post and upload viral wedding reels (Mehndi, Barat, Walima, Nikah, Mayun, Dholki)
           </p>
         </div>
         <button onClick={openAddModal} style={{ backgroundColor: '#D4AF37', color: '#000', padding: '10px 18px', borderRadius: '8px', fontWeight: '700', fontSize: '13px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
@@ -207,11 +229,23 @@ export default function AdminTrendingReels() {
                 backgroundColor: '#0a0a0f',
                 overflow: 'hidden'
               }}>
-                <img 
-                  src={reel.cover_image || 'https://images.unsplash.com/photo-1519741347686-cfcbf6bde2af?w=800'} 
-                  alt={reel.title} 
-                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                />
+                {reel.video_url ? (
+                  <video 
+                    src={reel.video_url} 
+                    autoPlay 
+                    muted 
+                    loop 
+                    playsInline 
+                    poster={reel.cover_image}
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <img 
+                    src={reel.cover_image || 'https://images.unsplash.com/photo-1519741347686-cfcbf6bde2af?w=800'} 
+                    alt={reel.title} 
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                )}
                 <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: '6px' }}>
                   <span style={{ background: '#D4AF37', color: '#000', padding: '3px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
                     {reel.event}
@@ -265,7 +299,7 @@ export default function AdminTrendingReels() {
       {/* Post / Edit Modal */}
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: '#111118', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px', padding: '24px', maxWidth: '440px', width: '100%', boxSizing: 'border-box' }}>
+          <div style={{ backgroundColor: '#111118', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px', padding: '24px', maxWidth: '480px', width: '100%', boxSizing: 'border-box', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 'bold', color: '#D4AF37', margin: 0 }}>
                 {editingId ? 'Edit Trending Reel' : 'Post Trending Reel'}
@@ -315,25 +349,53 @@ export default function AdminTrendingReels() {
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', color: '#aaa', marginBottom: '4px', textTransform: 'uppercase' }}>Video Stream URL</label>
+              {/* Direct Video File Upload or URL */}
+              <div style={{ background: '#0a0a0f', border: '1px solid rgba(212,175,55,0.3)', borderRadius: '10px', padding: '12px' }}>
+                <label style={{ display: 'block', fontSize: '11px', color: '#D4AF37', marginBottom: '6px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                  📹 Video File (Upload File OR Paste Link)
+                </label>
+                
+                <div style={{ marginBottom: '8px' }}>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', background: '#D4AF37', color: '#000', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
+                    📁 Choose Video File from Device...
+                    <input type="file" accept="video/*" onChange={handleVideoFileUpload} style={{ display: 'none' }} />
+                  </label>
+                  {form.video_url && form.video_url.startsWith('data:') && (
+                    <span style={{ fontSize: '11px', color: '#10b981', marginLeft: '8px' }}>✓ Video file selected</span>
+                  )}
+                </div>
+
                 <input 
-                  type="url" 
+                  type="text" 
                   value={form.video_url} 
                   onChange={e => setForm({ ...form, video_url: e.target.value })} 
-                  placeholder="https://example.com/video.mp4" 
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
+                  placeholder="Or paste video URL (https://example.com/video.mp4)" 
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', background: '#12121a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '12px', boxSizing: 'border-box' }}
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', color: '#aaa', marginBottom: '4px', textTransform: 'uppercase' }}>Cover Thumbnail Image URL</label>
+              {/* Direct Cover Image Upload or URL */}
+              <div style={{ background: '#0a0a0f', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '12px' }}>
+                <label style={{ display: 'block', fontSize: '11px', color: '#aaa', marginBottom: '6px', textTransform: 'uppercase' }}>
+                  🖼️ Cover Thumbnail (Upload File OR Paste Link)
+                </label>
+                
+                <div style={{ marginBottom: '8px' }}>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(255,255,255,0.1)', color: '#fff', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', border: '1px solid rgba(255,255,255,0.2)' }}>
+                    📁 Choose Cover Image File...
+                    <input type="file" accept="image/*" onChange={handleCoverFileUpload} style={{ display: 'none' }} />
+                  </label>
+                  {form.cover_image && form.cover_image.startsWith('data:') && (
+                    <span style={{ fontSize: '11px', color: '#10b981', marginLeft: '8px' }}>✓ Cover image selected</span>
+                  )}
+                </div>
+
                 <input 
-                  type="url" 
+                  type="text" 
                   value={form.cover_image} 
                   onChange={e => setForm({ ...form, cover_image: e.target.value })} 
-                  placeholder="https://images.unsplash.com/photo..." 
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
+                  placeholder="Or paste cover image URL (https://images.unsplash.com/...)" 
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', background: '#12121a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '12px', boxSizing: 'border-box' }}
                 />
               </div>
 

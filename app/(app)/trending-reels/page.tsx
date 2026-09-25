@@ -55,7 +55,7 @@ export default function TrendingReelsPage() {
           🔥 Trending Reels Guide
         </h1>
         <p style={{ fontSize: '12px', color: '#aaa', margin: 0 }}>
-          Popular video reel concepts for Mehndi, Barat, Walima, Nikah, Mayun & Dholki
+          Live GIF-style looping previews · Tap any reel for full audio playback
         </p>
       </div>
 
@@ -124,13 +124,27 @@ export default function TrendingReelsPage() {
                 backgroundColor: '#000',
                 overflow: 'hidden'
               }}>
-                <img 
-                  src={reel.cover_image || 'https://images.unsplash.com/photo-1519741347686-cfcbf6bde2af?w=800'} 
-                  alt={reel.title} 
-                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.7) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(212,175,55,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(0,0,0,0.5)' }}>
+                {reel.video_url ? (
+                  <video 
+                    src={reel.video_url} 
+                    autoPlay 
+                    muted 
+                    loop 
+                    playsInline 
+                    poster={reel.cover_image}
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <img 
+                    src={reel.cover_image || 'https://images.unsplash.com/photo-1519741347686-cfcbf6bde2af?w=800'} 
+                    alt={reel.title} 
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                )}
+
+                {/* Dark Gradient Overlay & Tap to Listen Icon */}
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.85 }}>
+                  <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: 'rgba(212,175,55,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(0,0,0,0.6)' }}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="#000">
                       <polygon points="5 3 19 12 5 21 5 3"></polygon>
                     </svg>
@@ -142,9 +156,14 @@ export default function TrendingReelsPage() {
                   <span style={{ background: '#D4AF37', color: '#000', padding: '3px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
                     {reel.event}
                   </span>
-                  <span style={{ background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '3px 8px', borderRadius: '4px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.2)' }}>
+                  <span style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '3px 8px', borderRadius: '4px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.2)' }}>
                     {isPortrait ? '📱 9:16 Reel' : '🖥️ 16:9 Film'}
                   </span>
+                </div>
+
+                {/* Muted GIF Indicator Badge */}
+                <div style={{ position: 'absolute', bottom: 10, left: 10, background: 'rgba(0,0,0,0.7)', color: '#D4AF37', fontSize: '10px', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span>🔇 GIF Loop (Tap for Audio)</span>
                 </div>
 
                 {/* Quick Action Overlay Buttons */}
@@ -199,7 +218,7 @@ export default function TrendingReelsPage() {
         })}
       </div>
 
-      {/* Fullscreen Video Player Modal */}
+      {/* Fullscreen Video Player Modal with Full Audio */}
       {activeVideo && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div style={{ width: '100%', maxWidth: (activeVideo.orientation || 'portrait') === 'portrait' ? '400px' : '720px', position: 'relative' }}>
