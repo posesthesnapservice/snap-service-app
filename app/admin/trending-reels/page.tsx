@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getTrendingReelsDB, saveTrendingReelsDB, addTrendingReelDB, updateTrendingReelDB, deleteTrendingReelDB, uploadMediaToSupabase } from '@/lib/poses-db-helpers';
+import { getTrendingReelsDB, saveTrendingReelsDB, addTrendingReelDB, updateTrendingReelDB, deleteTrendingReelDB, uploadMediaToSupabase, fetchTrendingReelsCloud } from '@/lib/poses-db-helpers';
 import { TrendingReel, PoseStatus } from '@/lib/types';
 import { REEL_EVENTS } from '@/lib/constants';
 import { lastCloudinaryError } from '@/lib/cloudinary';
@@ -65,6 +65,9 @@ export default function AdminTrendingReels() {
 
   useEffect(() => {
     setReels(getTrendingReelsDB());
+    fetchTrendingReelsCloud().then(cloudReels => {
+      if (cloudReels && cloudReels.length > 0) setReels(cloudReels);
+    });
   }, []);
 
   const openAddModal = () => {
@@ -372,13 +375,34 @@ export default function AdminTrendingReels() {
                   📹 Video File (Upload File OR Paste Link)
                 </label>
                 
-                <div style={{ marginBottom: '8px' }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', background: '#D4AF37', color: '#000', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
-                    📁 Choose Video File from Device...
-                    <input type="file" accept="video/*" onChange={handleVideoFileUpload} style={{ display: 'none' }} />
+                <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                  <label style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    background: uploadingVideo ? '#444' : '#D4AF37', 
+                    color: uploadingVideo ? '#aaa' : '#000', 
+                    padding: '8px 14px', 
+                    borderRadius: '6px', 
+                    cursor: uploadingVideo ? 'not-allowed' : 'pointer', 
+                    fontSize: '12px', 
+                    fontWeight: 'bold',
+                    pointerEvents: uploadingVideo ? 'none' : 'auto'
+                  }}>
+                    {uploadingVideo ? '⏳ Uploading...' : '📁 Choose Video File from Device...'}
+                    <input type="file" accept="video/*" onChange={handleVideoFileUpload} disabled={uploadingVideo} style={{ display: 'none' }} />
                   </label>
-                  {form.video_url && form.video_url.startsWith('data:') && (
-                    <span style={{ fontSize: '11px', color: '#10b981', marginLeft: '8px' }}>✓ Video file selected</span>
+
+                  {uploadingVideo && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#D4AF37', fontSize: '12px', fontWeight: 'bold' }}>
+                      <span style={{ width: '14px', height: '14px', border: '2px solid rgba(212,175,55,0.3)', borderTopColor: '#D4AF37', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                      <span>Uploading to 25GB Cloud... Please wait...</span>
+                    </div>
+                  )}
+
+                  {!uploadingVideo && form.video_url && (
+                    <span style={{ fontSize: '11px', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      ✓ Video uploaded & cloud link generated!
+                    </span>
                   )}
                 </div>
 
@@ -397,13 +421,32 @@ export default function AdminTrendingReels() {
                   🖼️ Cover Thumbnail (Upload File OR Paste Link)
                 </label>
                 
-                <div style={{ marginBottom: '8px' }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(255,255,255,0.1)', color: '#fff', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', border: '1px solid rgba(255,255,255,0.2)' }}>
-                    📁 Choose Cover Image File...
-                    <input type="file" accept="image/*" onChange={handleCoverFileUpload} style={{ display: 'none' }} />
+                <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                  <label style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    background: uploadingCover ? '#333' : 'rgba(255,255,255,0.1)', 
+                    color: uploadingCover ? '#aaa' : '#fff', 
+                    padding: '8px 14px', 
+                    borderRadius: '6px', 
+                    cursor: uploadingCover ? 'not-allowed' : 'pointer', 
+                    fontSize: '12px', 
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    pointerEvents: uploadingCover ? 'none' : 'auto'
+                  }}>
+                    {uploadingCover ? '⏳ Uploading...' : '📁 Choose Cover Image File...'}
+                    <input type="file" accept="image/*" onChange={handleCoverFileUpload} disabled={uploadingCover} style={{ display: 'none' }} />
                   </label>
-                  {form.cover_image && form.cover_image.startsWith('data:') && (
-                    <span style={{ fontSize: '11px', color: '#10b981', marginLeft: '8px' }}>✓ Cover image selected</span>
+
+                  {uploadingCover && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#D4AF37', fontSize: '12px' }}>
+                      <span style={{ width: '14px', height: '14px', border: '2px solid rgba(212,175,55,0.3)', borderTopColor: '#D4AF37', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                      <span>Uploading cover...</span>
+                    </div>
+                  )}
+
+                  {!uploadingCover && form.cover_image && (
+                    <span style={{ fontSize: '11px', color: '#10b981' }}>✓ Cover uploaded</span>
                   )}
                 </div>
 

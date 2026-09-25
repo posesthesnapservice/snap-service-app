@@ -217,3 +217,55 @@ export function deleteTrendingReelDB(id: string): TrendingReel[] {
 
   return updated;
 }
+
+// --- CLOUD SYNC FETCHERS ---
+export async function fetchTrendingReelsCloud(): Promise<TrendingReel[]> {
+  try {
+    const { data, error } = await supabase.from('snap_trending_reels').select('*').order('created_at', { ascending: false });
+    if (error || !data || data.length === 0) {
+      return getTrendingReelsDB();
+    }
+    const mapped: TrendingReel[] = data.map((d: any) => ({
+      id: d.id,
+      title: d.title,
+      description: d.description || '',
+      video_url: d.video_url,
+      cover_image: d.cover_url || d.cover_image,
+      event: d.event || 'General',
+      orientation: d.orientation || 'portrait',
+      status: 'published',
+      tags: d.tags || [],
+      created_at: d.created_at || new Date().toISOString()
+    }));
+    saveTrendingReelsDB(mapped);
+    return mapped;
+  } catch {
+    return getTrendingReelsDB();
+  }
+}
+
+export async function fetchPosesCloud(): Promise<Pose[]> {
+  try {
+    const { data, error } = await supabase.from('snap_poses').select('*').order('created_at', { ascending: false });
+    if (error || !data || data.length === 0) {
+      return getPosesDB();
+    }
+    const mapped: Pose[] = data.map((d: any) => ({
+      id: d.id,
+      title: d.title,
+      image_url: d.image_url,
+      instructions: d.instructions || '',
+      subjects: d.subjects || [],
+      shoot_types: d.shoot_types || [],
+      events: d.events || [],
+      tags: d.tags || [],
+      status: d.status || 'published',
+      created_at: d.created_at || new Date().toISOString(),
+      updated_at: d.created_at || new Date().toISOString()
+    }));
+    savePosesDB(mapped);
+    return mapped;
+  } catch {
+    return getPosesDB();
+  }
+}

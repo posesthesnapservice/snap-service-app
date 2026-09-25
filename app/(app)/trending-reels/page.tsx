@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getTrendingReelsDB } from '@/lib/poses-db-helpers';
+import { getTrendingReelsDB, fetchTrendingReelsCloud } from '@/lib/poses-db-helpers';
 import { TrendingReel } from '@/lib/types';
 import { REEL_EVENTS } from '@/lib/constants';
 import { getTodayShootIds, toggleTodayShoot } from '@/lib/today-shoot-helpers';
@@ -19,6 +19,13 @@ export default function TrendingReelsPage() {
     const favs = JSON.parse(localStorage.getItem('snap_favorites') || '[]');
     setFavorites(favs);
     setTodayIds(getTodayShootIds());
+
+    // Sync from Supabase Cloud Database (so newly uploaded PC reels appear on mobile!)
+    fetchTrendingReelsCloud().then(cloudReels => {
+      if (cloudReels && cloudReels.length > 0) {
+        setReels(cloudReels.filter(r => r.status !== 'hidden'));
+      }
+    });
   }, []);
 
   const toggleFav = (e: React.MouseEvent, id: string) => {
