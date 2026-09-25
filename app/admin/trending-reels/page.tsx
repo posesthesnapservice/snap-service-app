@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { getTrendingReelsDB, saveTrendingReelsDB, addTrendingReelDB, updateTrendingReelDB, deleteTrendingReelDB, uploadMediaToSupabase } from '@/lib/poses-db-helpers';
 import { TrendingReel, PoseStatus } from '@/lib/types';
 import { REEL_EVENTS } from '@/lib/constants';
+import { lastCloudinaryError } from '@/lib/cloudinary';
 
 // SVG Icons
 const PlusIcon = () => (
@@ -104,7 +105,7 @@ export default function AdminTrendingReels() {
     if (!file) return;
     setUploadingVideo(true);
 
-    // Try Supabase Storage upload first for cloud sync across all devices
+    // Try Cloudinary (25GB) or Supabase Storage upload
     const publicUrl = await uploadMediaToSupabase(file, 'reels-videos');
     if (publicUrl) {
       setForm(prev => ({ ...prev, video_url: publicUrl }));
@@ -112,14 +113,9 @@ export default function AdminTrendingReels() {
       return;
     }
 
-    // Local Data URL fallback
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      if (dataUrl) setForm(prev => ({ ...prev, video_url: dataUrl }));
-      setUploadingVideo(false);
-    };
-    reader.readAsDataURL(file);
+    setUploadingVideo(false);
+    const reason = lastCloudinaryError || 'Upload failed';
+    alert(`⚠️ Video Upload Failed: ${reason}\n\nKyunki Cloudinary par aapka preset 'poses preset' abhi 'Signed' mode par hai!\n\nHal: Cloudinary Settings -> Upload presets mein ja kar 'poses preset' par click karein aur Signing Mode ko 'Unsigned' karke Save karein.`);
   };
 
   const handleCoverFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -134,13 +130,9 @@ export default function AdminTrendingReels() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      if (dataUrl) setForm(prev => ({ ...prev, cover_image: dataUrl }));
-      setUploadingCover(false);
-    };
-    reader.readAsDataURL(file);
+    setUploadingCover(false);
+    const reason = lastCloudinaryError || 'Upload failed';
+    alert(`⚠️ Cover Image Upload Failed: ${reason}\n\nPlease check Cloudinary preset settings (must be 'Unsigned').`);
   };
 
   const toggleStatus = (id: string, currentStatus: PoseStatus) => {
