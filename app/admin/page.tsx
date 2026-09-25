@@ -78,7 +78,7 @@ export default function AdminDashboard() {
                 {action.label}
               </Link>
             ))}
-            <Link href="/" style={styles.actionBtnSecondary}>
+            <Link href="/home" style={styles.actionBtnSecondary}>
               👁 View Photographer App
             </Link>
           </div>
