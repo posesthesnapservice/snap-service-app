@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import ScreenshotProtector from '@/components/security/ScreenshotProtector';
-import DynamicWatermark from '@/components/security/DynamicWatermark';
 
 export const metadata: Metadata = {
   title: 'Snap Service - Photographer App',
@@ -33,7 +32,6 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', backgroundColor: '#0a0a0f', color: '#ffffff', margin: 0 }} suppressHydrationWarning>
         <ScreenshotProtector />
-        <DynamicWatermark />
         {children}
         <script
           dangerouslySetInnerHTML={{
