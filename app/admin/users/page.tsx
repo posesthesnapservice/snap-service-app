@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { 
   getUsersDB, 
   saveUsersDB, 
@@ -208,9 +209,14 @@ export default function AdminUsers() {
           <h1 style={styles.title}>User & Password Management</h1>
           <p style={styles.subtitle}>Control administrative access, assign user passwords, and manage reset requests</p>
         </div>
-        <button onClick={openAddModal} style={styles.addBtn}>
-          <PlusIcon /> Add User Account
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <Link href="/admin/assign-shoot" style={{ ...styles.addBtn, backgroundColor: '#1a1a26', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.4)', textDecoration: 'none' }}>
+            🎯 Assign Today&apos;s Shoot
+          </Link>
+          <button onClick={openAddModal} style={styles.addBtn}>
+            <PlusIcon /> Add User Account
+          </button>
+        </div>
       </div>
 
       {/* Password Reset Requests Card (if any pending) */}
@@ -334,6 +340,15 @@ export default function AdminUsers() {
                   </td>
                   <td style={{ ...styles.td, textAlign: 'right' }}>
                     <div style={styles.actionGroup}>
+                      {user.role !== 'admin' && (
+                        <Link 
+                          href={`/admin/assign-shoot?user=${user.id}`} 
+                          style={{ ...styles.actionBtnBlue, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(212,175,55,0.15)', borderColor: 'rgba(212,175,55,0.3)', color: '#D4AF37' }} 
+                          title={`Assign Today's Shoot to ${user.name}`}
+                        >
+                          🎯
+                        </Link>
+                      )}
                       <button onClick={() => startEdit(user)} style={styles.actionBtnBlue} title="Change Password / Edit User">
                         <EditIcon />
                       </button>

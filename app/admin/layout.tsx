@@ -41,6 +41,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: '⊞' },
+    { name: 'Assign Shoot 🎯', path: '/admin/assign-shoot', icon: '🎯' },
     { name: 'Poses', path: '/admin/poses', icon: '📷' },
     { name: 'Categories & Tags', path: '/admin/categories', icon: '🏷️' },
     { name: 'Shot List', path: '/admin/shot-list', icon: '✓' },
@@ -109,7 +110,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <span style={{ color: '#D4AF37', fontSize: 13, fontWeight: 700 }}>Admin</span>
         </div>
         <div style={{ display: 'flex', gap: 4, overflowX: 'auto', flex: 1 }}>
-          {navItems.slice(0, 5).map((item) => {
+          {navItems.map((item) => {
             const isActive = pathname === item.path || (item.path !== '/admin' && pathname.startsWith(item.path));
             return (
               <Link key={item.name} href={item.path} style={{
@@ -121,7 +122,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 color: isActive ? '#D4AF37' : '#666',
                 background: isActive ? 'rgba(212,175,55,0.1)' : 'transparent',
               }}>
-                {item.icon} {item.name.split(' ')[0]}
+                {item.icon} {item.name.replace(' 🎯', '').split(' ')[0]}
               </Link>
             );
           })}

@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Pose } from '@/lib/types';
-import { getPosesDB } from '@/lib/poses-db-helpers';
-import { getUsersDB, UserAccount, getRoleBadgeInfo } from '@/lib/auth-helpers';
+import { getPosesDB, fetchPosesCloud } from '@/lib/poses-db-helpers';
+import { getUsersDB, fetchUsersCloud, UserAccount, getRoleBadgeInfo } from '@/lib/auth-helpers';
 import { 
   createAssignment, 
   getAssignmentsDB, 
@@ -32,17 +32,34 @@ export default function AdminAssignShootPage() {
   useEffect(() => {
     const p = getPosesDB();
     setPoses(p);
+    fetchPosesCloud().then(cloudPoses => {
+      if (cloudPoses && cloudPoses.length > 0) setPoses(cloudPoses);
+    }).catch(() => {});
 
+    const userParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('user') : null;
     const u = getUsersDB().filter(usr => usr.role !== 'admin' && usr.active);
     setUsers(u);
-    if (u.length > 0) {
+    if (userParam) {
+      setTargetUserId(userParam);
+    } else if (u.length > 0) {
       setTargetUserId(u[0].id);
     }
+    fetchUsersCloud().then(cloudUsers => {
+      const active = (cloudUsers || []).filter(usr => usr.role !== 'admin' && usr.active);
+      if (active.length > 0) {
+        setUsers(active);
+        if (userParam && active.some(usr => usr.id === userParam)) {
+          setTargetUserId(userParam);
+        } else {
+          setTargetUserId(prev => prev || active[0].id);
+        }
+      }
+    }).catch(() => {});
 
     setAssignments(getAssignmentsDB());
     fetchAssignmentsCloud().then(cloudAsg => {
       if (cloudAsg && cloudAsg.length > 0) setAssignments(cloudAsg);
-    });
+    }).catch(() => {});
   }, []);
 
   const togglePoseSelection = (id: string) => {
