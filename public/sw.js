@@ -1,4 +1,4 @@
-const CACHE_NAME = 'snap-service-v2';
+const CACHE_NAME = 'snap-service-v4';
 const PRECACHE_URLS = [
   '/',
   '/home',
@@ -41,7 +41,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Network-first for API routes
+  // 1. NEVER intercept or cache cross-origin requests (Supabase, Cloudinary, etc.)
+  // Always let the browser perform direct live network requests!
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  // 2. Network-first for internal API routes
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request)
@@ -58,11 +64,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first, network fallback for offline reliability
+  // 3. For page navigation, network-first with cache fallback
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request) || caches.match('/home') || caches.match('/'))
+    );
+    return;
+  }
+
+  // 4. Cache-first, network fallback for static local assets (images, icons, js, css)
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request).then((fetchResponse) => {
-        // Cache successful GET requests
         if (event.request.method === 'GET' && fetchResponse && fetchResponse.status === 200) {
           const responseToCache = fetchResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -70,11 +83,6 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return fetchResponse;
-      }).catch(() => {
-        // Fallback for offline navigation
-        if (event.request.mode === 'navigate') {
-          return caches.match('/home') || caches.match('/');
-        }
       });
     })
   );

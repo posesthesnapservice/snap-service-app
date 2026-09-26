@@ -116,6 +116,16 @@ export default function AdminTrendingReels() {
 
   const [uploadingGlobal, setUploadingGlobal] = useState(false);
   const [uploadProgressText, setUploadProgressText] = useState('');
+  const [syncing, setSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    setSyncing(true);
+    const cloud = await fetchTrendingReelsCloud();
+    if (cloud && cloud.length > 0) {
+      setReels(cloud);
+    }
+    setTimeout(() => setSyncing(false), 600);
+  };
 
   useEffect(() => {
     setReels(getTrendingReelsDB());
@@ -453,24 +463,45 @@ export default function AdminTrendingReels() {
             Upload multiple videos at once with live looping GIF previews, separate scrollable edit boxes & independent publishing
           </p>
         </div>
-        <button 
-          onClick={openAddModal} 
-          style={{ 
-            backgroundColor: '#D4AF37', 
-            color: '#000', 
-            padding: '11px 20px', 
-            borderRadius: '8px', 
-            fontWeight: '700', 
-            fontSize: '13px', 
-            border: 'none', 
-            cursor: 'pointer', 
-            display: 'flex', 
-            alignItems: 'center',
-            boxShadow: '0 4px 15px rgba(212,175,55,0.3)'
-          }}
-        >
-          <PlusIcon /> Post / Batch Upload Reels
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button 
+            onClick={handleManualSync}
+            style={{
+              backgroundColor: 'rgba(212,175,55,0.12)',
+              color: '#D4AF37',
+              border: '1px solid rgba(212,175,55,0.3)',
+              padding: '11px 16px',
+              borderRadius: '8px',
+              fontWeight: '600',
+              fontSize: '13px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <span style={{ display: 'inline-block', transform: syncing ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s' }}>🔄</span>
+            {syncing ? 'Syncing...' : 'Sync Cloud'}
+          </button>
+          <button 
+            onClick={openAddModal} 
+            style={{ 
+              backgroundColor: '#D4AF37', 
+              color: '#000', 
+              padding: '11px 20px', 
+              borderRadius: '8px', 
+              fontWeight: '700', 
+              fontSize: '13px', 
+              border: 'none', 
+              cursor: 'pointer', 
+              display: 'flex', 
+              alignItems: 'center',
+              boxShadow: '0 4px 15px rgba(212,175,55,0.3)'
+            }}
+          >
+            <PlusIcon /> Post / Batch Upload Reels
+          </button>
+        </div>
       </div>
 
       {/* Event Category Filters */}

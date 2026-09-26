@@ -175,15 +175,15 @@ export function saveTrendingReelsDB(items: TrendingReel[]): void {
 
 export function addTrendingReelDB(newItem: TrendingReel): TrendingReel[] {
   const current = getTrendingReelsDB();
-  const updated = [newItem, ...current];
+  const updated = [newItem, ...current.filter(item => item.id !== newItem.id)];
   saveTrendingReelsDB(updated);
 
   const eventsStr = Array.isArray(newItem.events) && newItem.events.length > 0 
     ? newItem.events.join(', ') 
     : (newItem.event || 'General');
 
-  // Async sync to Supabase Database table
-  supabase.from('snap_trending_reels').insert([{
+  // Async sync to Supabase Database table with upsert to prevent conflict
+  supabase.from('snap_trending_reels').upsert([{
     id: newItem.id,
     title: newItem.title,
     video_url: newItem.video_url || '',
@@ -191,8 +191,8 @@ export function addTrendingReelDB(newItem: TrendingReel): TrendingReel[] {
     description: newItem.description || '',
     orientation: newItem.orientation || 'portrait',
     event: eventsStr
-  }]).then((res) => {
-    if (res && res.error) console.warn('Supabase DB Sync (Reels insert) notice:', res.error.message);
+  }], { onConflict: 'id' }).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Reels upsert) notice:', res.error.message);
   });
 
   return updated;
@@ -253,8 +253,17 @@ export async function fetchTrendingReelsCloud(): Promise<TrendingReel[]> {
         created_at: d.created_at || new Date().toISOString()
       };
     });
-    saveTrendingReelsDB(mapped);
-    return mapped;
+
+    // Merge cloud and local reels by ID so nothing is ever lost on sync
+    const local = getTrendingReelsDB();
+    const map = new Map<string, TrendingReel>();
+    mapped.forEach(r => map.set(r.id, r));
+    local.forEach(r => {
+      if (!map.has(r.id)) map.set(r.id, r);
+    });
+    const merged = Array.from(map.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    saveTrendingReelsDB(merged);
+    return merged;
   } catch {
     return getTrendingReelsDB();
   }

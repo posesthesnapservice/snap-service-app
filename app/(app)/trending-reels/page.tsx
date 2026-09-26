@@ -13,6 +13,16 @@ export default function TrendingReelsPage() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [todayIds, setTodayIds] = useState<string[]>([]);
   const [activeVideo, setActiveVideo] = useState<TrendingReel | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    setSyncing(true);
+    const cloud = await fetchTrendingReelsCloud();
+    if (cloud && cloud.length > 0) {
+      setReels(cloud.filter(r => r.status !== 'hidden'));
+    }
+    setTimeout(() => setSyncing(false), 600);
+  };
 
   useEffect(() => {
     setReels(getTrendingReelsDB().filter(r => r.status !== 'hidden'));
@@ -60,13 +70,35 @@ export default function TrendingReelsPage() {
   return (
     <div style={{ padding: '16px', color: '#fff', minHeight: '100vh', background: '#0a0a0f' }}>
       {/* Title */}
-      <div style={{ marginBottom: '16px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 4px 0', color: '#D4AF37', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          🔥 Trending Reels Guide
-        </h1>
-        <p style={{ fontSize: '12px', color: '#aaa', margin: 0 }}>
-          Live GIF-style looping previews · Tap any reel for full audio playback
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', gap: '10px' }}>
+        <div>
+          <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 4px 0', color: '#D4AF37', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            🔥 Trending Reels Guide
+          </h1>
+          <p style={{ fontSize: '12px', color: '#aaa', margin: 0 }}>
+            Live GIF-style looping previews · Tap any reel for full audio playback
+          </p>
+        </div>
+        <button
+          onClick={handleManualSync}
+          style={{
+            background: 'rgba(212,175,55,0.12)',
+            border: '1px solid rgba(212,175,55,0.3)',
+            color: '#D4AF37',
+            padding: '6px 12px',
+            borderRadius: '16px',
+            fontSize: '11px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <span style={{ display: 'inline-block', transform: syncing ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s' }}>🔄</span>
+          {syncing ? 'Syncing...' : 'Sync Cloud'}
+        </button>
       </div>
 
       {/* Search Input */}
