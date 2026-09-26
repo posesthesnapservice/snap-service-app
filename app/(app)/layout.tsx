@@ -14,15 +14,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const redirected = useRef(false);
 
   useEffect(() => {
-    if (redirected.current) return;
     const user = getUser();
-    if (!user) {
-      redirected.current = true;
-      router.replace('/login');
+    if (!user || user.active === false) {
+      if (!redirected.current) {
+        redirected.current = true;
+        router.replace('/login');
+      }
     } else {
       setAuthorized(true);
     }
-  }, []);
+  }, [pathname]);
 
   // Save last visited screen so closing and reopening app restores it
   useEffect(() => {

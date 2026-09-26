@@ -12,15 +12,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const redirected = useRef(false);
 
   useEffect(() => {
-    if (redirected.current) return;
     const user = getUser();
-    if (!user || user.role !== 'admin') {
-      redirected.current = true;
-      router.replace('/login');
+    if (!user || user.role !== 'admin' || user.active === false) {
+      if (!redirected.current) {
+        redirected.current = true;
+        router.replace('/login');
+      }
     } else {
       setAuthorized(true);
     }
-  }, []); // ← empty deps: only run ONCE on mount
+  }, [pathname]);
 
   const handleSignOut = () => {
     if (typeof window !== 'undefined') {
