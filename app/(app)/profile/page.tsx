@@ -95,6 +95,21 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        <div 
+          style={{ ...menuItemStyle, border: '1px solid rgba(239, 68, 68, 0.35)', background: 'rgba(239, 68, 68, 0.08)' }}
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('snap-test-blackout'));
+            }
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+            <span style={{ color: '#f87171', fontWeight: '600', fontSize: '0.95rem' }}>🔒 Test Screenshot Lock</span>
+            <span style={{ fontSize: '11px', background: 'rgba(239, 68, 68, 0.25)', border: '1px solid rgba(239, 68, 68, 0.5)', color: '#fca5a5', padding: '3px 10px', borderRadius: '12px', fontWeight: 'bold' }}>Tap to Test</span>
+          </div>
+          <span style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>Simulate immediate screen blackout and protection shield</span>
+        </div>
+
         {(user.role?.toLowerCase() === 'admin') && (
           <Link href="/admin" style={{ textDecoration: 'none' }}>
             <div style={{ ...menuItemStyle, color: '#D4AF37' }}>

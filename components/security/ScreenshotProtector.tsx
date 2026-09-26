@@ -33,14 +33,29 @@ export default function ScreenshotProtector() {
         return;
       }
 
-      // Mac screenshot shortcuts: Cmd + Shift + 3, Cmd + Shift + 4, Cmd + Shift + 5
-      if (e.metaKey && e.shiftKey && ['3', '4', '5', '$', '#', '%'].includes(e.key)) {
-        triggerBlackout(2500);
+      // Mac screenshot shortcuts: Cmd + Shift + 3, Cmd + Shift + 4, Cmd + Shift + 5, Cmd + Shift + 6
+      const isMacScreenshot =
+        e.metaKey &&
+        e.shiftKey &&
+        (
+          ['Digit3', 'Digit4', 'Digit5', 'Digit6', 'KeyS'].includes(e.code) ||
+          ['3', '4', '5', '6', '#', '$', '%', '^', 's', 'S'].includes(e.key) ||
+          [51, 52, 53, 54, 83].includes(e.keyCode)
+        );
+      if (isMacScreenshot) {
+        triggerBlackout(2800);
         return;
       }
 
       // Windows Snipping Tool shortcut: Win + Shift + S
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'S' || e.key === 's')) {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'S' || e.key === 's' || e.code === 'KeyS')) {
+        triggerBlackout(2800);
+        return;
+      }
+
+      // Prevent Print & PDF Save: Ctrl+P or Cmd+P
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.code === 'KeyP')) {
+        e.preventDefault();
         triggerBlackout(2500);
         return;
       }
@@ -115,10 +130,17 @@ export default function ScreenshotProtector() {
       e.preventDefault();
     };
 
+    // 5. Test Trigger Listener (For manual or in-app testing)
+    const handleTestEvent = () => {
+      triggerBlackout(2500);
+    };
+    (window as any).testScreenshotLock = () => triggerBlackout(2500);
+
     window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('keyup', handleKeyUp, true);
     window.addEventListener('blur', handleBlur);
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('snap-test-blackout', handleTestEvent);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     document.addEventListener('contextmenu', handleContextMenu);
     document.addEventListener('dragstart', handleDragStart);
@@ -128,6 +150,7 @@ export default function ScreenshotProtector() {
       window.removeEventListener('keyup', handleKeyUp, true);
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('snap-test-blackout', handleTestEvent);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('dragstart', handleDragStart);
