@@ -70,21 +70,43 @@ function VideoIcon({ color }: { color: string }) {
   );
 }
 
-const tabs = [
-  { name: 'Home', path: '/home', Icon: HomeIcon },
-  { name: 'Reels', path: '/trending-reels', Icon: VideoIcon },
-  { name: 'Today', path: '/today-shoot', Icon: ZapIcon },
-  { name: 'Favorites', path: '/favorites', Icon: HeartIcon },
-  { name: 'AI', path: '/ai-assistant', Icon: SparkleIcon },
-  { name: 'Shot List', path: '/shot-list', Icon: ListIcon },
-];
+import { useState, useEffect } from 'react';
+import { getUser, canAccessPhotography, canAccessVideography } from '@/lib/auth-helpers';
+import { UserRole } from '@/lib/types';
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const [role, setRole] = useState<UserRole>('all_rounder');
+
+  useEffect(() => {
+    const u = getUser();
+    if (u?.role) {
+      setRole(u.role);
+    }
+  }, []);
+
+  const hasPhoto = canAccessPhotography(role);
+  const hasVideo = canAccessVideography(role);
+
+  // Generate role-specific navigation tabs
+  const visibleTabs = [
+    { name: 'Home', path: '/home', Icon: HomeIcon },
+    // Only for Photographers or All-Rounders
+    ...(hasPhoto ? [{ name: 'Poses', path: '/poses', Icon: GridIcon }] : []),
+    // Only for Cinematographers or All-Rounders
+    ...(hasVideo ? [{ name: 'Reels', path: '/trending-reels', Icon: VideoIcon }] : []),
+    // Shot list for photo only if not video-only
+    ...(hasPhoto && !hasVideo ? [{ name: 'Shot List', path: '/shot-list', Icon: ListIcon }] : []),
+    // Cinematic for video only if not photo
+    ...(!hasPhoto && hasVideo ? [{ name: 'Cinematic', path: '/cinematic', Icon: ListIcon }] : []),
+    { name: 'Today', path: '/today-shoot', Icon: ZapIcon },
+    { name: 'Favorites', path: '/favorites', Icon: HeartIcon },
+    { name: 'AI', path: '/ai-assistant', Icon: SparkleIcon },
+  ];
 
   return (
     <nav style={styles.nav}>
-      {tabs.map((tab) => {
+      {visibleTabs.map((tab) => {
         const isActive = pathname === tab.path || pathname.startsWith(tab.path + '/');
         const color = isActive ? '#D4AF37' : '#666';
         return (

@@ -1,12 +1,13 @@
 // Auth helpers with Username or Email sign-in, status access control, last login tracking, and localStorage + Supabase Cloud DB persistence
 import { supabase } from './supabase';
+import { UserRole } from './types';
 
 export interface AuthUser {
   id: string;
   email: string;
   username?: string;
   name: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   active: boolean;
   last_login_at?: string;
 }
@@ -17,10 +18,39 @@ export interface UserAccount {
   username?: string;
   password?: string;
   name: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   active: boolean;
   created_at?: string;
   last_login_at?: string;
+}
+
+export function canAccessPhotography(role?: UserRole): boolean {
+  if (!role) return false;
+  return role === 'admin' || role === 'all_rounder' || role === 'photographer' || role === 'user';
+}
+
+export function canAccessVideography(role?: UserRole): boolean {
+  if (!role) return false;
+  return role === 'admin' || role === 'all_rounder' || role === 'cinematographer';
+}
+
+export function canAccessAdmin(role?: UserRole): boolean {
+  return role === 'admin';
+}
+
+export function getRoleBadgeInfo(role?: UserRole): { label: string; color: string; bg: string; border: string } {
+  switch (role) {
+    case 'admin':
+      return { label: 'ADMINISTRATOR', color: '#c084fc', bg: 'rgba(192, 132, 252, 0.15)', border: 'rgba(192, 132, 252, 0.3)' };
+    case 'all_rounder':
+      return { label: 'LEAD / ALL-ROUNDER', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.15)', border: 'rgba(251, 191, 36, 0.3)' };
+    case 'cinematographer':
+      return { label: 'CINEMATOGRAPHER', color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)', border: 'rgba(56, 189, 248, 0.3)' };
+    case 'photographer':
+    case 'user':
+    default:
+      return { label: 'PHOTOGRAPHER', color: '#34d399', bg: 'rgba(52, 211, 153, 0.15)', border: 'rgba(52, 211, 153, 0.3)' };
+  }
 }
 
 // Initial Demo Users with clean dates (no fake/mock last_login_at)
@@ -41,7 +71,7 @@ export const INITIAL_USERS: UserAccount[] = [
     username: 'ahmed', 
     password: 'photo123', 
     name: 'Ahmed Khan', 
-    role: 'user', 
+    role: 'photographer', 
     active: true, 
     created_at: '2026-08-01T00:00:00.000Z'
   },
@@ -51,7 +81,17 @@ export const INITIAL_USERS: UserAccount[] = [
     username: 'sara', 
     password: 'video123', 
     name: 'Sara Ali', 
-    role: 'user', 
+    role: 'cinematographer', 
+    active: true, 
+    created_at: '2026-08-01T00:00:00.000Z'
+  },
+  { 
+    id: '4', 
+    email: 'lead@snapservice.com', 
+    username: 'zunair', 
+    password: 'lead123', 
+    name: 'Zunair Lead', 
+    role: 'all_rounder', 
     active: true, 
     created_at: '2026-08-01T00:00:00.000Z'
   },
@@ -72,20 +112,26 @@ export function getUsersDB(): UserAccount[] {
     
     let users: UserAccount[] = JSON.parse(stored);
 
-    // One-time automatic cleanup: Remove old mock dummy timestamps from Sara & Ahmed if they never actually logged in
-    const cleanedFlag = localStorage.getItem('snap_users_cleaned_v2');
-    if (!cleanedFlag) {
-      users = users.map(u => {
-        // If it's sara or ahmed and has legacy mock last_login_at
-        if ((u.email === 'video@snapservice.com' || u.email === 'photo@snapservice.com')) {
-          const updated = { ...u };
-          delete updated.last_login_at;
-          return updated;
+    // Role migration: upgrade any legacy 'user' roles and add demo lead if missing
+    let hasChanges = false;
+    users = users.map(u => {
+      if (u.role === ('user' as any)) {
+        hasChanges = true;
+        if (u.email?.includes('video') || u.username?.includes('sara')) {
+          return { ...u, role: 'cinematographer' as UserRole };
         }
-        return u;
-      });
+        return { ...u, role: 'photographer' as UserRole };
+      }
+      return u;
+    });
+
+    if (!users.some(u => u.username === 'zunair' || u.email === 'lead@snapservice.com')) {
+      users.push(INITIAL_USERS[3]);
+      hasChanges = true;
+    }
+
+    if (hasChanges) {
       localStorage.setItem('snap_users_db', JSON.stringify(users));
-      localStorage.setItem('snap_users_cleaned_v2', 'true');
     }
 
     return users;

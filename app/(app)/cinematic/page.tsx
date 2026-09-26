@@ -1,15 +1,23 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { getUser, canAccessVideography } from "@/lib/auth-helpers";
 import { getCinematicDB } from "@/lib/poses-db-helpers";
 import { CinematicShot } from "@/lib/types";
 
 export default function CinematicShotsPage() {
+  const router = useRouter();
   const [shots, setShots] = useState<CinematicShot[]>([]);
   const [activeTab, setActiveTab] = useState("All");
   const [selectedShot, setSelectedShot] = useState<CinematicShot | null>(null);
 
   useEffect(() => {
+    const u = getUser();
+    if (u && !canAccessVideography(u.role)) {
+      router.replace('/home');
+      return;
+    }
     setShots(getCinematicDB().filter((s: any) => s.status !== 'hidden'));
   }, []);
 

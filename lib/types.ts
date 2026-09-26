@@ -1,6 +1,19 @@
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'all_rounder' | 'photographer' | 'cinematographer' | 'user';
 export type PoseStatus = 'published' | 'hidden';
 export type ChecklistItemStatus = 'done' | 'not_done';
+
+export interface ShootAssignment {
+  id: string;
+  title: string;
+  assigned_by_name: string;
+  target_user_id: string;
+  target_user_name: string;
+  pose_ids: string[];
+  event_name?: string;
+  notes?: string;
+  status: 'pending' | 'accepted_merged' | 'accepted_replaced' | 'dismissed';
+  created_at: string;
+}
 
 export interface User {
   id: string;

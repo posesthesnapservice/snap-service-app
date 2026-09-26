@@ -2,14 +2,16 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getUser } from '@/lib/auth-helpers';
+import { getUser, canAccessPhotography, canAccessVideography, getRoleBadgeInfo } from '@/lib/auth-helpers';
+import { getPendingAssignmentsForUser, ShootAssignment } from '@/lib/assignment-helpers';
 import Link from 'next/link';
-import { mockPoses } from '@/lib/mock-data';
+import { getPosesDB } from '@/lib/poses-db-helpers';
 
 export default function HomePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingAssignments, setPendingAssignments] = useState<ShootAssignment[]>([]);
 
   useEffect(() => {
     const u = getUser();
@@ -17,11 +19,17 @@ export default function HomePage() {
       router.replace('/login');
     } else {
       setUser(u);
+      const pending = getPendingAssignmentsForUser(u.id);
+      setPendingAssignments(pending);
     }
     setLoading(false);
   }, []);
 
   if (loading) return <div style={{ padding: '20px', color: 'white' }}>Loading...</div>;
+
+  const hasPhoto = canAccessPhotography(user?.role);
+  const hasVideo = canAccessVideography(user?.role);
+  const roleBadge = getRoleBadgeInfo(user?.role);
 
   return (
     <div style={{ padding: '20px', paddingBottom: '80px', minHeight: '100vh', background: 'linear-gradient(180deg, #121212 0%, #1a1a1a 100%)', color: 'white', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -34,44 +42,93 @@ export default function HomePage() {
       </header>
 
       <div>
-        <h2 style={{ fontSize: '1.8rem', margin: '10px 0 5px 0' }}>Ready to shoot, {user?.name || 'Ahmed'}!</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <h2 style={{ fontSize: '1.8rem', margin: '10px 0 5px 0' }}>Ready to shoot, {user?.name || 'Ahmed'}!</h2>
+          {roleBadge && (
+            <span style={{ fontSize: '11px', fontWeight: '700', color: roleBadge.color, backgroundColor: roleBadge.bg, border: `1px solid ${roleBadge.border}`, padding: '3px 8px', borderRadius: '6px', marginTop: '6px' }}>
+              {roleBadge.label}
+            </span>
+          )}
+        </div>
         <input type="text" placeholder="Quick search poses, shots..." style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: '#2a2a2a', color: 'white', marginTop: '10px' }} />
       </div>
+
+      {/* Pending Shoot Assignment Banner */}
+      {pendingAssignments.length > 0 && (
+        <Link href="/today-shoot" style={{ textDecoration: 'none' }}>
+          <div style={{ background: 'linear-gradient(90deg, rgba(212,175,55,0.2) 0%, rgba(212,175,55,0.05) 100%)', border: '1px solid #D4AF37', borderRadius: '10px', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#fff', boxShadow: '0 4px 15px rgba(212,175,55,0.15)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '22px' }}>🎯</span>
+              <div>
+                <div style={{ fontWeight: '700', color: '#D4AF37', fontSize: '13px' }}>
+                  New Shoot Assignment from Admin!
+                </div>
+                <div style={{ fontSize: '11px', color: '#bbb' }}>
+                  {pendingAssignments[0].title} ({pendingAssignments[0].pose_ids.length} shots) — Tap to review
+                </div>
+              </div>
+            </div>
+            <span style={{ color: '#D4AF37', fontWeight: 'bold', fontSize: '13px' }}>Review →</span>
+          </div>
+        </Link>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
         <Link href="/today-shoot" style={{ textDecoration: 'none', gridColumn: '1 / -1' }}>
           <div className="home-card" style={{ ...cardStyle, background: 'linear-gradient(135deg, #1e1b10 0%, #2a2208 100%)', border: '1px solid rgba(212, 175, 55, 0.4)' }}>
             <div style={iconStyle}>⚡</div>
             <h3 style={{ ...titleStyle, color: '#D4AF37' }}>TODAY&apos;S SHOOT</h3>
-            <p style={subtitleStyle}>Separate & track selected shots for today&apos;s wedding</p>
+            <p style={subtitleStyle}>Separate &amp; track selected shots for today&apos;s wedding</p>
             <div style={arrowStyle}>→</div>
           </div>
         </Link>
-        <Link href="/poses" style={{ textDecoration: 'none' }}>
-          <div className="home-card" style={cardStyle}>
-            <div style={iconStyle}>📷</div>
-            <h3 style={titleStyle}>POSE LIBRARY</h3>
-            <p style={subtitleStyle}>Browse {mockPoses?.length || 500}+ reference poses</p>
-            <div style={arrowStyle}>→</div>
-          </div>
-        </Link>
-        <Link href="/shot-list" style={{ textDecoration: 'none' }}>
-          <div className="home-card" style={cardStyle}>
-            <div style={iconStyle}>📋</div>
-            <h3 style={titleStyle}>SHOT LIST</h3>
-            <p style={subtitleStyle}>Important shots to capture</p>
-            <div style={arrowStyle}>→</div>
-          </div>
-        </Link>
-        <Link href="/cinematic" style={{ textDecoration: 'none' }}>
-          <div className="home-card" style={cardStyle}>
-            <div style={iconStyle}>🎞️</div>
-            <h3 style={titleStyle}>CINEMATIC SHOTS</h3>
-            <p style={subtitleStyle}>Video shot references</p>
-            <div style={arrowStyle}>→</div>
-          </div>
-        </Link>
-        <Link href="/dont-miss" style={{ textDecoration: 'none' }}>
+
+        {/* Photography Tools: Pose Library & Shot List */}
+        {hasPhoto && (
+          <>
+            <Link href="/poses" style={{ textDecoration: 'none' }}>
+              <div className="home-card" style={cardStyle}>
+                <div style={iconStyle}>📷</div>
+                <h3 style={titleStyle}>POSE LIBRARY</h3>
+                <p style={subtitleStyle}>Browse reference poses</p>
+                <div style={arrowStyle}>→</div>
+              </div>
+            </Link>
+            <Link href="/shot-list" style={{ textDecoration: 'none' }}>
+              <div className="home-card" style={cardStyle}>
+                <div style={iconStyle}>📋</div>
+                <h3 style={titleStyle}>SHOT LIST</h3>
+                <p style={subtitleStyle}>Important shots to capture</p>
+                <div style={arrowStyle}>→</div>
+              </div>
+            </Link>
+          </>
+        )}
+
+        {/* Videography Tools: Trending Reels & Cinematic Shots */}
+        {hasVideo && (
+          <>
+            <Link href="/trending-reels" style={{ textDecoration: 'none' }}>
+              <div className="home-card" style={cardStyle}>
+                <div style={iconStyle}>🔥</div>
+                <h3 style={titleStyle}>TRENDING REELS</h3>
+                <p style={subtitleStyle}>Live looping reel ideas</p>
+                <div style={arrowStyle}>→</div>
+              </div>
+            </Link>
+            <Link href="/cinematic" style={{ textDecoration: 'none' }}>
+              <div className="home-card" style={cardStyle}>
+                <div style={iconStyle}>🎞️</div>
+                <h3 style={titleStyle}>CINEMATIC SHOTS</h3>
+                <p style={subtitleStyle}>Video shot references</p>
+                <div style={arrowStyle}>→</div>
+              </div>
+            </Link>
+          </>
+        )}
+
+        {/* General Tools: Don't Miss & AI Assistant */}
+        <Link href="/dont-miss" style={{ textDecoration: 'none', gridColumn: (!hasPhoto || !hasVideo) ? '1 / -1' : undefined }}>
           <div className="home-card" style={cardStyle}>
             <div style={iconStyle}>⭐</div>
             <h3 style={titleStyle}>DON&apos;T MISS THIS</h3>
@@ -79,6 +136,7 @@ export default function HomePage() {
             <div style={arrowStyle}>→</div>
           </div>
         </Link>
+
         <Link href="/ai-assistant" style={{ textDecoration: 'none', gridColumn: '1 / -1' }}>
           <div className="home-card" style={{ ...cardStyle, background: 'linear-gradient(45deg, #2a2a2a, #3a2a2a)' }}>
             <div style={iconStyle}>✨</div>

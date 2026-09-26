@@ -1,12 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { getUser, canAccessPhotography } from "@/lib/auth-helpers";
 import { mockShotList } from "@/lib/mock-data";
 
 export default function ShotListPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeEvent, setActiveEvent] = useState("All");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const u = getUser();
+    if (u && !canAccessPhotography(u.role)) {
+      router.replace('/home');
+    }
+  }, []);
 
   // Derive unique events from mockShotList
   const events = ["All", ...Array.from(new Set(mockShotList.map(shot => shot.event || "Other")))];

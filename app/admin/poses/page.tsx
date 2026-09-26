@@ -131,9 +131,14 @@ export default function AdminPoses() {
           <h1 style={styles.title}>Pose Management</h1>
           <p style={styles.subtitle}>Curate and organize photography poses for snap sessions</p>
         </div>
-        <Link href="/admin/poses/new" style={styles.addBtn}>
-          <PlusIcon /> Add New Pose
-        </Link>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <Link href="/admin/assign-shoot" style={{ ...styles.addBtn, backgroundColor: '#1a1a26', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.4)' }}>
+            🎯 Assign Today&apos;s Shoot
+          </Link>
+          <Link href="/admin/poses/new" style={styles.addBtn}>
+            <PlusIcon /> Add New Pose
+          </Link>
+        </div>
       </div>
 
       {/* Control Panel (Filters & Search) */}

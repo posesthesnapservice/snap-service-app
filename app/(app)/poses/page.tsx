@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getTodayShootIds, toggleTodayShoot } from '@/lib/today-shoot-helpers';
 import { getPosesDB } from '@/lib/poses-db-helpers';
 import { Pose } from '@/lib/types';
+import { getUser, canAccessPhotography } from '@/lib/auth-helpers';
 
 const SUBJECT_FILTERS = ['All', 'Bride', 'Groom', 'Couple', 'Sisters', 'Brothers', 'Old Age'];
 const EVENT_FILTERS = ['All', 'Mehndi', 'Nikah', 'Barat', 'Walima', 'Reception', 'Pre-Wedding'];
@@ -31,6 +32,11 @@ export default function PosesPage() {
   const touchStartY = useRef(0);
 
   useEffect(() => {
+    const u = getUser();
+    if (u && !canAccessPhotography(u.role)) {
+      router.replace('/home');
+      return;
+    }
     setPosesList(getPosesDB());
     const favs = JSON.parse(localStorage.getItem('snap_favorites') || '[]');
     setFavorites(favs);

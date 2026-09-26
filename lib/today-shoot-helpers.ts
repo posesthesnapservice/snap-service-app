@@ -1,19 +1,19 @@
 // Helper module to manage user-specific Today's Shoot selection in localStorage
 import { getUser } from './auth-helpers';
 
-function getKeys() {
+function getKeys(targetUserId?: string) {
   const u = getUser();
-  const userId = u?.id || 'guest';
+  const userId = targetUserId || u?.id || 'guest';
   return {
     shootKey: `snap_today_shoot_${userId}`,
     doneKey: `snap_today_shoot_done_${userId}`,
   };
 }
 
-export function getTodayShootIds(): string[] {
+export function getTodayShootIds(targetUserId?: string): string[] {
   if (typeof window === 'undefined') return [];
   try {
-    const { shootKey } = getKeys();
+    const { shootKey } = getKeys(targetUserId);
     return JSON.parse(localStorage.getItem(shootKey) || '[]');
   } catch {
     return [];
@@ -42,10 +42,44 @@ export function toggleTodayShoot(poseId: string): string[] {
   return updated;
 }
 
-export function clearTodayShoot(): void {
+/**
+ * Merge newly assigned items into user's existing Today's Shoot list (no duplicates)
+ */
+export function mergeTodayShootItems(newIds: string[], targetUserId?: string): string[] {
+  if (typeof window === 'undefined') return [];
+  const { shootKey } = getKeys(targetUserId);
+  const current = getTodayShootIds(targetUserId);
+  const mergedSet = new Set([...current, ...newIds]);
+  const updated = Array.from(mergedSet);
+  try {
+    localStorage.setItem(shootKey, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to merge Today Shoot list:', e);
+  }
+  return updated;
+}
+
+/**
+ * Replace user's Today's Shoot list completely with new items
+ */
+export function replaceTodayShootItems(newIds: string[], targetUserId?: string): string[] {
+  if (typeof window === 'undefined') return [];
+  const { shootKey, doneKey } = getKeys(targetUserId);
+  const updated = Array.from(new Set(newIds));
+  try {
+    localStorage.setItem(shootKey, JSON.stringify(updated));
+    // Clear done checkmarks since it is a fresh replacement list
+    localStorage.removeItem(doneKey);
+  } catch (e) {
+    console.error('Failed to replace Today Shoot list:', e);
+  }
+  return updated;
+}
+
+export function clearTodayShoot(targetUserId?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    const { shootKey, doneKey } = getKeys();
+    const { shootKey, doneKey } = getKeys(targetUserId);
     localStorage.removeItem(shootKey);
     localStorage.removeItem(doneKey);
   } catch (e) {
@@ -53,10 +87,10 @@ export function clearTodayShoot(): void {
   }
 }
 
-export function getTodayShootDoneIds(): string[] {
+export function getTodayShootDoneIds(targetUserId?: string): string[] {
   if (typeof window === 'undefined') return [];
   try {
-    const { doneKey } = getKeys();
+    const { doneKey } = getKeys(targetUserId);
     return JSON.parse(localStorage.getItem(doneKey) || '[]');
   } catch {
     return [];
@@ -80,3 +114,4 @@ export function toggleTodayShootDone(poseId: string): string[] {
   }
   return updated;
 }
+

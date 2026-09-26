@@ -8,7 +8,8 @@ import {
   UserAccount,
   fetchUsersCloud,
   upsertUserCloud,
-  deleteUserCloud
+  deleteUserCloud,
+  getRoleBadgeInfo
 } from '@/lib/auth-helpers';
 import { 
   getPasswordResets, 
@@ -83,7 +84,7 @@ export default function AdminUsers() {
   }, []);
 
   const [showModal, setShowModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', username: '', password: '', role: 'user' as UserRole });
+  const [newUser, setNewUser] = useState({ name: '', email: '', username: '', password: '', role: 'photographer' as UserRole });
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
   const toggleStatus = (id: string) => {
@@ -294,16 +295,21 @@ export default function AdminUsers() {
                     </div>
                   </td>
                   <td style={styles.td}>
-                    <span 
-                      style={{ 
-                        ...styles.roleBadge,
-                        color: user.role === 'admin' ? '#7c3aed' : '#3b82f6',
-                        backgroundColor: user.role === 'admin' ? 'rgba(124,58,237,0.08)' : 'rgba(59,130,246,0.08)',
-                        borderColor: user.role === 'admin' ? 'rgba(124,58,237,0.18)' : 'rgba(59,130,246,0.18)'
-                      }}
-                    >
-                      {user.role.toUpperCase()}
-                    </span>
+                    {(() => {
+                      const badge = getRoleBadgeInfo(user.role);
+                      return (
+                        <span 
+                          style={{ 
+                            ...styles.roleBadge,
+                            color: badge.color,
+                            backgroundColor: badge.bg,
+                            borderColor: badge.border
+                          }}
+                        >
+                          {badge.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td style={styles.td}>
                     <span style={{ fontSize: '12px', color: user.last_login_at ? '#10b981' : '#666', fontWeight: user.last_login_at ? '500' : 'normal' }}>
@@ -418,7 +424,9 @@ export default function AdminUsers() {
                   onChange={e => setNewUser({ ...newUser, role: e.target.value as UserRole })}
                   style={styles.select}
                 >
-                  <option value="user">Photographer (User)</option>
+                  <option value="photographer">Photographer (Photo Only)</option>
+                  <option value="cinematographer">Cinematographer (Video Only)</option>
+                  <option value="all_rounder">Lead / All-Rounder (Photo + Video)</option>
                   <option value="admin">System Administrator (Admin)</option>
                 </select>
               </div>

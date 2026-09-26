@@ -2,8 +2,21 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { mockPoses } from '@/lib/mock-data';
-import { getTodayShootIds, toggleTodayShoot, clearTodayShoot, getTodayShootDoneIds, toggleTodayShootDone } from '@/lib/today-shoot-helpers';
+import { getPosesDB } from '@/lib/poses-db-helpers';
+import { getUser } from '@/lib/auth-helpers';
+import { 
+  getTodayShootIds, 
+  toggleTodayShoot, 
+  clearTodayShoot, 
+  getTodayShootDoneIds, 
+  toggleTodayShootDone 
+} from '@/lib/today-shoot-helpers';
+import { 
+  getPendingAssignmentsForUser, 
+  respondToAssignment, 
+  fetchAssignmentsCloud, 
+  ShootAssignment 
+} from '@/lib/assignment-helpers';
 import Link from 'next/link';
 
 export default function TodayShootPage() {
@@ -11,6 +24,11 @@ export default function TodayShootPage() {
   const [todayIds, setTodayIds] = useState<string[]>([]);
   const [doneIds, setDoneIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [toastMsg, setToastMsg] = useState('');
+
+  // Pending Shoot Assignment Modal States
+  const [pendingAssignments, setPendingAssignments] = useState<ShootAssignment[]>([]);
+  const [activeAssignment, setActiveAssignment] = useState<ShootAssignment | null>(null);
   
   // Swipe Popup States
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -23,9 +41,60 @@ export default function TodayShootPage() {
   useEffect(() => {
     setTodayIds(getTodayShootIds());
     setDoneIds(getTodayShootDoneIds());
+
+    const u = getUser();
+    if (u) {
+      const pending = getPendingAssignmentsForUser(u.id);
+      setPendingAssignments(pending);
+      if (pending.length > 0) {
+        setActiveAssignment(pending[0]);
+      }
+
+      fetchAssignmentsCloud().then(() => {
+        const fresh = getPendingAssignmentsForUser(u.id);
+        setPendingAssignments(fresh);
+        if (fresh.length > 0) {
+          setActiveAssignment((prev: ShootAssignment | null) => prev || fresh[0]);
+        }
+      });
+    }
+
     const t = setTimeout(() => setLoading(false), 300);
     return () => clearTimeout(t);
   }, []);
+
+  const handleAcceptAssignment = (action: 'merge' | 'replace') => {
+    if (!activeAssignment) return;
+    const count = activeAssignment.pose_ids.length;
+    respondToAssignment(activeAssignment.id, action);
+    
+    // Refresh IDs
+    setTodayIds(getTodayShootIds());
+    setDoneIds(getTodayShootDoneIds());
+
+    const u = getUser();
+    if (u) {
+      setPendingAssignments(getPendingAssignmentsForUser(u.id));
+    }
+    setActiveAssignment(null);
+
+    setToastMsg(
+      action === 'merge' 
+        ? `✅ Merged ${count} shots into your Today's Shoot!` 
+        : `🔄 Replaced Today's Shoot with ${count} assigned shots!`
+    );
+    setTimeout(() => setToastMsg(''), 4500);
+  };
+
+  const handleDismissAssignment = () => {
+    if (!activeAssignment) return;
+    respondToAssignment(activeAssignment.id, 'dismiss');
+    const u = getUser();
+    if (u) {
+      setPendingAssignments(getPendingAssignmentsForUser(u.id));
+    }
+    setActiveAssignment(null);
+  };
 
   const handleRemoveFromToday = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
@@ -53,7 +122,8 @@ export default function TodayShootPage() {
     }
   };
 
-  const todayPoses = (mockPoses || []).filter((p: any) => todayIds.includes(p.id));
+  const allPoses = getPosesDB();
+  const todayPoses = allPoses.filter((p: any) => todayIds.includes(p.id));
   const doneCount = todayPoses.filter((p: any) => doneIds.includes(p.id)).length;
   const totalCount = todayPoses.length;
   const isAllDone = totalCount > 0 && doneCount === totalCount;
@@ -150,6 +220,174 @@ export default function TodayShootPage() {
           </button>
         )}
       </header>
+
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div style={{ backgroundColor: 'rgba(16,185,129,0.2)', border: '1px solid #10b981', color: '#10b981', padding: '12px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '600', textAlign: 'center', animation: 'fadeIn 0.3s' }}>
+          {toastMsg}
+        </div>
+      )}
+
+      {/* Pending Assignment Banner if modal was closed */}
+      {pendingAssignments.length > 0 && !activeAssignment && (
+        <div style={{ backgroundColor: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.4)', borderRadius: '10px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ color: '#D4AF37', fontWeight: '700', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              🎯 {pendingAssignments.length} Pending Assignment{pendingAssignments.length > 1 ? 's' : ''} from Admin
+            </div>
+            <div style={{ color: '#aaa', fontSize: '11px', marginTop: '2px' }}>
+              {pendingAssignments[0].title} ({pendingAssignments[0].pose_ids.length} shots)
+            </div>
+          </div>
+          <button 
+            onClick={() => setActiveAssignment(pendingAssignments[0])}
+            style={{ backgroundColor: '#D4AF37', color: '#000', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
+          >
+            Review &amp; Apply
+          </button>
+        </div>
+      )}
+
+      {/* Assignment Modal Popup */}
+      {activeAssignment && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.82)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px'
+        }}>
+          <div style={{
+            backgroundColor: '#12121a',
+            border: '2px solid #D4AF37',
+            borderRadius: '16px',
+            maxWidth: '460px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '24px',
+            boxShadow: '0 10px 40px rgba(212,175,55,0.25)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            {/* Modal Header */}
+            <div>
+              <div style={{ display: 'inline-block', backgroundColor: 'rgba(212,175,55,0.15)', color: '#D4AF37', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', marginBottom: '8px' }}>
+                🎯 Admin Shoot Assignment
+              </div>
+              <h2 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: '700', color: '#fff' }}>
+                {activeAssignment.title}
+              </h2>
+              <div style={{ fontSize: '12px', color: '#888' }}>
+                Assigned by: <strong style={{ color: '#ccc' }}>{activeAssignment.assigned_by_name}</strong>
+              </div>
+            </div>
+
+            {/* Notes if any */}
+            {activeAssignment.notes && (
+              <div style={{ backgroundColor: '#1a1a26', border: '1px solid #2a2a3a', borderRadius: '8px', padding: '12px', fontSize: '13px', color: '#ddd', lineHeight: '1.4' }}>
+                <span style={{ color: '#D4AF37', fontWeight: '600' }}>Instructions: </span>
+                {activeAssignment.notes}
+              </div>
+            )}
+
+            {/* Shots Preview */}
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#aaa', marginBottom: '8px' }}>
+                Assigned Shots ({activeAssignment.pose_ids.length}):
+              </div>
+              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
+                {activeAssignment.pose_ids.map((pId: string) => {
+                  const p = allPoses.find((item: any) => item.id === pId);
+                  return (
+                    <div key={pId} style={{ minWidth: '90px', width: '90px', backgroundColor: '#1a1a26', borderRadius: '8px', overflow: 'hidden', border: '1px solid #333' }}>
+                      <div style={{ height: '90px', width: '100%', backgroundColor: '#0a0a0f' }}>
+                        {p?.image_url ? (
+                          <img src={p.image_url} alt={p?.title || 'Shot'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: '10px', color: '#666' }}>No Image</div>
+                        )}
+                      </div>
+                      <div style={{ padding: '4px 6px', fontSize: '10px', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {p?.title || pId}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Action Buttons: Merge or Replace */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '8px' }}>
+              <button
+                onClick={() => handleAcceptAssignment('merge')}
+                style={{
+                  backgroundColor: '#D4AF37',
+                  color: '#000',
+                  fontWeight: '700',
+                  padding: '14px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '2px',
+                  boxShadow: '0 4px 15px rgba(212,175,55,0.3)'
+                }}
+              >
+                <span>➕ Add to My Today&apos;s Shoot</span>
+                <span style={{ fontSize: '11px', fontWeight: 'normal', opacity: 0.85 }}>Keep my current picks and add these {activeAssignment.pose_ids.length} shots</span>
+              </button>
+
+              <button
+                onClick={() => handleAcceptAssignment('replace')}
+                style={{
+                  backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                  color: '#60a5fa',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  fontWeight: '700',
+                  padding: '12px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '2px'
+                }}
+              >
+                <span>🔄 Replace My Today&apos;s Shoot</span>
+                <span style={{ fontSize: '11px', fontWeight: 'normal', opacity: 0.85 }}>Clear my current list and start fresh with these {activeAssignment.pose_ids.length} shots</span>
+              </button>
+
+              <button
+                onClick={handleDismissAssignment}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#888',
+                  padding: '8px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  textDecoration: 'underline'
+                }}
+              >
+                Dismiss for now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Progress Bar Header */}
       {totalCount > 0 && (

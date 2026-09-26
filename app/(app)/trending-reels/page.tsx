@@ -5,8 +5,11 @@ import { getTrendingReelsDB, fetchTrendingReelsCloud } from '@/lib/poses-db-help
 import { TrendingReel } from '@/lib/types';
 import { REEL_EVENTS } from '@/lib/constants';
 import { getTodayShootIds, toggleTodayShoot } from '@/lib/today-shoot-helpers';
+import { useRouter } from 'next/navigation';
+import { getUser, canAccessVideography } from '@/lib/auth-helpers';
 
 export default function TrendingReelsPage() {
+  const router = useRouter();
   const [reels, setReels] = useState<TrendingReel[]>([]);
   const [selectedEvent, setSelectedEvent] = useState('All');
   const [search, setSearch] = useState('');
@@ -25,6 +28,12 @@ export default function TrendingReelsPage() {
   };
 
   useEffect(() => {
+    const u = getUser();
+    if (u && !canAccessVideography(u.role)) {
+      router.replace('/home');
+      return;
+    }
+
     setReels(getTrendingReelsDB().filter(r => r.status !== 'hidden'));
     const favs = JSON.parse(localStorage.getItem('snap_favorites') || '[]');
     setFavorites(favs);

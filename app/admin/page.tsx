@@ -24,7 +24,8 @@ export default function AdminDashboard() {
   ];
 
   const quickActions = [
-    { label: '+ Add New Pose', href: '/admin/poses/new', primary: true },
+    { label: '🎯 Assign Today\'s Shoot', href: '/admin/assign-shoot', primary: true },
+    { label: '+ Add New Pose', href: '/admin/poses/new', primary: false },
     { label: '+ Add Shot', href: '/admin/shot-list', primary: false },
     { label: '+ Manage Users', href: '/admin/users', primary: false },
   ];
