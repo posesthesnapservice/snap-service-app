@@ -45,7 +45,7 @@ export default function AppHeader({ title = 'Snap Service', showSearch, showBack
 
   const handleAdminClick = (e: React.MouseEvent) => {
     const u = getUser();
-    if (!u || u.role !== 'admin') {
+    if (!u || u.role?.toLowerCase() !== 'admin') {
       e.preventDefault();
       if (confirm('Admin Panel requires Admin credentials (admin@snapservice.com / admin123).\n\nSwitch to Admin Login now?')) {
         logout();

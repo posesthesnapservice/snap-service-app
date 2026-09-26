@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { getPosesDB } from "@/lib/poses-db-helpers";
+import { getTodayShootIds, toggleTodayShoot } from "@/lib/today-shoot-helpers";
 import Link from "next/link";
 
 export default function AIAssistantPage() {
@@ -10,6 +11,13 @@ export default function AIAssistantPage() {
   const [results, setResults] = useState<any[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [todayIds, setTodayIds] = useState<string[]>([]);
+  const [toastMsg, setToastMsg] = useState("");
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(""), 2500);
+  };
 
   // Swipe Popup States
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -23,6 +31,7 @@ export default function AIAssistantPage() {
     try {
       const favs = JSON.parse(localStorage.getItem('snap_favorites') || '[]');
       setFavorites(favs);
+      setTodayIds(getTodayShootIds());
     } catch (e) {}
   }, []);
 
@@ -32,13 +41,24 @@ export default function AIAssistantPage() {
     let newFavs = [...favorites];
     if (newFavs.includes(id)) {
       newFavs = newFavs.filter(fid => fid !== id);
+      showToast("🤍 Removed from Favorites");
     } else {
       newFavs.push(id);
+      showToast("❤️ Added to Favorites!");
     }
     setFavorites(newFavs);
     try {
       localStorage.setItem('snap_favorites', JSON.stringify(newFavs));
     } catch (e) {}
+  };
+
+  const toggleToday = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const updated = toggleTodayShoot(id);
+    setTodayIds(updated);
+    const added = updated.includes(id);
+    showToast(added ? "✅ Added to Today's Shoot!" : "Removed from Today's Shoot");
   };
 
   // Local TF-IDF Search Engine
@@ -352,13 +372,23 @@ export default function AIAssistantPage() {
                   <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8" }}>No Image</div>
                 )}
                 
-                {/* Heart Button */}
-                <button 
-                  onClick={(e) => toggleFav(e, pose.id)} 
-                  style={{ position: 'absolute', top: '6px', left: '6px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: favorites.includes(pose.id) ? '#ff4081' : 'white', fontSize: '10px', padding: 0, zIndex: 10 }}
-                >
-                  {favorites.includes(pose.id) ? '♥' : '♡'}
-                </button>
+                {/* Action Buttons */}
+                <div style={{ position: 'absolute', top: '6px', left: '6px', display: 'flex', gap: '4px', zIndex: 10 }}>
+                  <button 
+                    onClick={(e) => toggleToday(e, pose.id)} 
+                    style={{ position: 'relative', background: todayIds.includes(pose.id) ? '#10b981' : 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'white', fontSize: '11px', padding: 0 }}
+                    title={todayIds.includes(pose.id) ? "In Today Shoot" : "Add to Today Shoot"}
+                  >
+                    {todayIds.includes(pose.id) ? '✓' : '+'}
+                  </button>
+                  <button 
+                    onClick={(e) => toggleFav(e, pose.id)} 
+                    style={{ position: 'relative', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: favorites.includes(pose.id) ? '#ff4081' : 'white', fontSize: '10px', padding: 0 }}
+                    title={favorites.includes(pose.id) ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    {favorites.includes(pose.id) ? '♥' : '♡'}
+                  </button>
+                </div>
 
                 {/* Gradient overlay for text visibility */}
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "8px", background: "linear-gradient(transparent, rgba(0,0,0,0.9))" }}>
@@ -526,24 +556,41 @@ export default function AIAssistantPage() {
                 {results[activeIndex].instructions}
               </p>
 
-              <Link 
-                href={`/poses/${results[activeIndex].id}`}
-                style={{
-                  display: 'block',
-                  textAlign: 'center',
-                  marginTop: '10px',
-                  padding: '8px',
-                  borderRadius: '8px',
-                  background: 'rgba(212,175,55,0.1)',
-                  border: '1px solid rgba(212,175,55,0.2)',
-                  color: '#D4AF37',
-                  fontSize: '0.72rem',
-                  fontWeight: 'bold',
-                  textDecoration: 'none',
-                }}
-              >
-                View Details & camera specs →
-              </Link>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                <button
+                  onClick={(e) => toggleToday(e, results[activeIndex].id)}
+                  style={{
+                    flex: 1,
+                    padding: '8px',
+                    borderRadius: '8px',
+                    background: todayIds.includes(results[activeIndex].id) ? '#10b981' : 'rgba(212,175,55,0.15)',
+                    border: todayIds.includes(results[activeIndex].id) ? '1px solid #10b981' : '1px solid rgba(212,175,55,0.3)',
+                    color: todayIds.includes(results[activeIndex].id) ? '#fff' : '#D4AF37',
+                    fontSize: '0.72rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {todayIds.includes(results[activeIndex].id) ? "✓ In Today's Shoot" : "+ Today"}
+                </button>
+                <Link 
+                  href={`/poses/${results[activeIndex].id}`}
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    padding: '8px',
+                    borderRadius: '8px',
+                    background: 'rgba(212,175,55,0.1)',
+                    border: '1px solid rgba(212,175,55,0.2)',
+                    color: '#D4AF37',
+                    fontSize: '0.72rem',
+                    fontWeight: 'bold',
+                    textDecoration: 'none',
+                  }}
+                >
+                  Specs →
+                </Link>
+              </div>
             </div>
           </div>
 
@@ -553,6 +600,28 @@ export default function AIAssistantPage() {
           >
             ›
           </button>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div style={{
+          position: "fixed",
+          top: "20px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          backgroundColor: "rgba(10, 10, 15, 0.95)",
+          color: "#D4AF37",
+          padding: "10px 20px",
+          borderRadius: "30px",
+          border: "1px solid #D4AF37",
+          fontSize: "13px",
+          fontWeight: "700",
+          zIndex: 9999,
+          boxShadow: "0 8px 30px rgba(0,0,0,0.8)",
+          pointerEvents: "none"
+        }}>
+          {toastMsg}
         </div>
       )}
 

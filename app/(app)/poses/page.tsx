@@ -32,6 +32,11 @@ export default function PosesPage() {
   const touchStartY = useRef(0);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const q = new URLSearchParams(window.location.search).get('search');
+      if (q) setSearch(q);
+    }
+
     const u = getUser();
     if (u && !canAccessPhotography(u.role)) {
       router.replace('/home');

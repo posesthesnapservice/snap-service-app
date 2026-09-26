@@ -1,9 +1,10 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, canAccessVideography } from "@/lib/auth-helpers";
 import { getCinematicDB, fetchCinematicCloud } from "@/lib/poses-db-helpers";
+import { getTodayShootIds, toggleTodayShoot } from "@/lib/today-shoot-helpers";
 import { CinematicShot } from "@/lib/types";
 
 export default function CinematicShotsPage() {
@@ -11,6 +12,14 @@ export default function CinematicShotsPage() {
   const [shots, setShots] = useState<CinematicShot[]>([]);
   const [activeTab, setActiveTab] = useState("All");
   const [selectedShot, setSelectedShot] = useState<CinematicShot | null>(null);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [todayIds, setTodayIds] = useState<string[]>([]);
+  const [toastMsg, setToastMsg] = useState("");
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(""), 2500);
+  };
 
   useEffect(() => {
     const u = getUser();
@@ -19,12 +28,40 @@ export default function CinematicShotsPage() {
       return;
     }
     setShots(getCinematicDB().filter((s: any) => s.status !== 'hidden'));
+    const favs = JSON.parse(localStorage.getItem('snap_favorites') || '[]');
+    setFavorites(favs);
+    setTodayIds(getTodayShootIds());
+
     fetchCinematicCloud().then(cloudShots => {
       if (cloudShots && cloudShots.length > 0) {
         setShots(cloudShots.filter((s: any) => s.status !== 'hidden'));
       }
     }).catch(() => {});
   }, []);
+
+  const toggleFav = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    let newFavs = [...favorites];
+    if (newFavs.includes(id)) {
+      newFavs = newFavs.filter(fid => fid !== id);
+      showToast("🤍 Removed from Favorites");
+    } else {
+      newFavs.push(id);
+      showToast("❤️ Added to Favorites!");
+    }
+    setFavorites(newFavs);
+    localStorage.setItem('snap_favorites', JSON.stringify(newFavs));
+  };
+
+  const toggleToday = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const updated = toggleTodayShoot(id);
+    setTodayIds(updated);
+    const added = updated.includes(id);
+    showToast(added ? "✅ Added to Today's Shoot!" : "Removed from Today's Shoot");
+  };
 
   const categories = ["All", ...Array.from(new Set(shots.map(shot => shot.event || shot.camera_movement || "Other")))];
 
@@ -111,6 +148,48 @@ export default function CinematicShotsPage() {
                     {isPortrait ? "📱 9:16 Reel" : "🖥️ 16:9 Film"}
                   </span>
                 </div>
+
+                {/* Quick Action Overlay Buttons */}
+                <div style={{ position: "absolute", top: 10, right: 10, display: "flex", gap: "6px", zIndex: 30 }}>
+                  <button 
+                    onClick={e => toggleToday(e, shot.id)} 
+                    style={{ 
+                      background: todayIds.includes(shot.id) ? "#10b981" : "rgba(0,0,0,0.6)", 
+                      border: "1px solid rgba(255,255,255,0.2)", 
+                      color: "#fff", 
+                      borderRadius: "50%", 
+                      width: "32px", 
+                      height: "32px", 
+                      cursor: "pointer",
+                      fontSize: "13px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                    title="Add to Today Shoot"
+                  >
+                    {todayIds.includes(shot.id) ? "✓" : "+"}
+                  </button>
+                  <button 
+                    onClick={e => toggleFav(e, shot.id)} 
+                    style={{ 
+                      background: favorites.includes(shot.id) ? "rgba(239,68,68,0.9)" : "rgba(0,0,0,0.6)", 
+                      border: "1px solid rgba(255,255,255,0.2)", 
+                      color: "#fff", 
+                      borderRadius: "50%", 
+                      width: "32px", 
+                      height: "32px", 
+                      cursor: "pointer",
+                      fontSize: "13px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                    title={favorites.includes(shot.id) ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    {favorites.includes(shot.id) ? "❤️" : "🤍"}
+                  </button>
+                </div>
               </div>
 
               <div style={{ padding: "1.25rem" }}>
@@ -140,7 +219,7 @@ export default function CinematicShotsPage() {
               />
               <button
                 onClick={() => setSelectedShot(null)}
-                style={{ position: "absolute", top: "1rem", right: "1rem", backgroundColor: "rgba(0,0,0,0.6)", color: "#fff", border: "none", width: "2.5rem", height: "2.5rem", borderRadius: "50%", cursor: "pointer", fontSize: "1.25rem", display: "flex", alignItems: "center", justifyContent: "center" }}
+                style={{ position: "absolute", top: "1rem", right: "1rem", backgroundColor: "rgba(0,0,0,0.6)", color: "#fff", border: "none", width: "2.5rem", height: "2.5rem", borderRadius: "50%", cursor: "pointer", fontSize: "1.25rem", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}
               >
                 ✕
               </button>
@@ -157,10 +236,67 @@ export default function CinematicShotsPage() {
                 <div style={{ fontSize: "0.85rem", color: "#D4AF37", marginBottom: "4px" }}>📹 Movement: {selectedShot.camera_movement}</div>
               )}
               {selectedShot.framing && (
-                <div style={{ fontSize: "0.85rem", color: "#aaa" }}>📐 Framing: {selectedShot.framing}</div>
+                <div style={{ fontSize: "0.85rem", color: "#aaa", marginBottom: "1rem" }}>📐 Framing: {selectedShot.framing}</div>
               )}
+
+              {/* Action Buttons */}
+              <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+                <button
+                  onClick={e => toggleToday(e, selectedShot.id)}
+                  style={{
+                    flex: 1,
+                    padding: "10px",
+                    borderRadius: "10px",
+                    background: todayIds.includes(selectedShot.id) ? "#10b981" : "linear-gradient(135deg, #D4AF37 0%, #B8960C 100%)",
+                    color: todayIds.includes(selectedShot.id) ? "#fff" : "#000",
+                    fontWeight: "bold",
+                    fontSize: "12px",
+                    border: "none",
+                    cursor: "pointer"
+                  }}
+                >
+                  {todayIds.includes(selectedShot.id) ? "✓ In Today's Shoot" : "+ Add to Today's Shoot"}
+                </button>
+                <button
+                  onClick={e => toggleFav(e, selectedShot.id)}
+                  style={{
+                    padding: "10px 16px",
+                    borderRadius: "10px",
+                    background: favorites.includes(selectedShot.id) ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.1)",
+                    border: favorites.includes(selectedShot.id) ? "1px solid rgba(239,68,68,0.4)" : "1px solid rgba(255,255,255,0.2)",
+                    color: favorites.includes(selectedShot.id) ? "#ef4444" : "#fff",
+                    fontWeight: "bold",
+                    fontSize: "12px",
+                    cursor: "pointer"
+                  }}
+                >
+                  {favorites.includes(selectedShot.id) ? "❤️ Favorited" : "🤍 Favorite"}
+                </button>
+              </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div style={{
+          position: "fixed",
+          top: "20px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          backgroundColor: "rgba(10, 10, 15, 0.95)",
+          color: "#D4AF37",
+          padding: "10px 20px",
+          borderRadius: "30px",
+          border: "1px solid #D4AF37",
+          fontSize: "13px",
+          fontWeight: "700",
+          zIndex: 9999,
+          boxShadow: "0 8px 30px rgba(0,0,0,0.8)",
+          pointerEvents: "none"
+        }}>
+          {toastMsg}
         </div>
       )}
     </div>

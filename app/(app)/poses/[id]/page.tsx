@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { getPosesDB } from '@/lib/poses-db-helpers';
+import { getTodayShootIds, toggleTodayShoot } from '@/lib/today-shoot-helpers';
 
 export default function PoseDetails({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -10,7 +11,14 @@ export default function PoseDetails({ params }: { params: Promise<{ id: string }
   const router = useRouter();
   const [pose, setPose] = useState<any>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [todayIds, setTodayIds] = useState<string[]>([]);
   const [allPoses, setAllPoses] = useState<any[]>([]);
+  const [toastMsg, setToastMsg] = useState('');
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 2500);
+  };
 
   useEffect(() => {
     if (!poseId) return;
@@ -20,22 +28,33 @@ export default function PoseDetails({ params }: { params: Promise<{ id: string }
     setPose(p || null);
     const favs = JSON.parse(localStorage.getItem('snap_favorites') || '[]');
     setFavorites(favs);
+    setTodayIds(getTodayShootIds());
   }, [poseId]);
 
   if (pose === undefined) return <div style={{ color: 'white', padding: '20px' }}>Loading...</div>;
   if (pose === null) return <div style={{ color: 'white', padding: '20px' }}>404 - Pose Not Found</div>;
 
   const isFav = favorites.includes(pose.id);
+  const isToday = todayIds.includes(pose.id);
 
   const toggleFav = () => {
     let newFavs = [...favorites];
     if (isFav) {
       newFavs = newFavs.filter(fid => fid !== pose.id);
+      showToast('🤍 Removed from Favorites');
     } else {
       newFavs.push(pose.id);
+      showToast('❤️ Added to Favorites!');
     }
     setFavorites(newFavs);
     localStorage.setItem('snap_favorites', JSON.stringify(newFavs));
+  };
+
+  const handleToggleToday = () => {
+    const updated = toggleTodayShoot(pose.id);
+    setTodayIds(updated);
+    const added = updated.includes(pose.id);
+    showToast(added ? "✅ Added to Today's Shoot!" : "Removed from Today's Shoot");
   };
 
   const idx = (allPoses || []).findIndex((x: any) => x.id === pose.id);
@@ -44,16 +63,77 @@ export default function PoseDetails({ params }: { params: Promise<{ id: string }
 
   return (
     <div style={{ background: '#121212', color: 'white', minHeight: '100vh', paddingBottom: '80px', display: 'flex', flexDirection: 'column' }}>
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(10, 10, 15, 0.95)',
+          color: '#D4AF37',
+          padding: '10px 20px',
+          borderRadius: '30px',
+          border: '1px solid #D4AF37',
+          fontSize: '13px',
+          fontWeight: '700',
+          zIndex: 9999,
+          boxShadow: '0 8px 30px rgba(0,0,0,0.8)',
+          pointerEvents: 'none',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          {toastMsg}
+        </div>
+      )}
+
       <div style={{ position: 'relative', height: '60vh', width: '100%' }}>
         <img src={pose.image_url || 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?w=800'} alt={pose.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         
-        <button onClick={() => router.back()} style={{ position: 'absolute', top: '20px', left: '20px', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+        <button onClick={() => router.back()} style={{ position: 'absolute', top: '20px', left: '20px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}>
           ←
         </button>
         
-        <button onClick={toggleFav} style={{ position: 'absolute', top: '20px', right: '20px', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: isFav ? '#ff4081' : 'white', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.2s' }}>
-          {isFav ? '♥' : '♡'}
-        </button>
+        <div style={{ position: 'absolute', top: '20px', right: '20px', display: 'flex', gap: '8px', zIndex: 10 }}>
+          <button 
+            onClick={handleToggleToday} 
+            style={{ 
+              background: isToday ? '#10b981' : 'rgba(0,0,0,0.6)', 
+              border: '1px solid rgba(255,255,255,0.2)', 
+              borderRadius: '20px', 
+              padding: '8px 14px', 
+              color: 'white', 
+              fontSize: '0.85rem', 
+              fontWeight: 'bold', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '6px', 
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+            }}
+          >
+            {isToday ? '✓ In Today' : '+ Today'}
+          </button>
+          
+          <button 
+            onClick={toggleFav} 
+            style={{ 
+              background: isFav ? 'rgba(239, 68, 68, 0.9)' : 'rgba(0,0,0,0.6)', 
+              border: '1px solid rgba(255,255,255,0.2)', 
+              borderRadius: '50%', 
+              width: '40px', 
+              height: '40px', 
+              color: 'white', 
+              fontSize: '1.2rem', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              cursor: 'pointer', 
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+            }}
+          >
+            {isFav ? '♥' : '♡'}
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: '20px', flex: 1 }}>

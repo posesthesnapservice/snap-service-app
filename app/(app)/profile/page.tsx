@@ -95,7 +95,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {user.role === 'ADMIN' && (
+        {(user.role?.toLowerCase() === 'admin') && (
           <Link href="/admin" style={{ textDecoration: 'none' }}>
             <div style={{ ...menuItemStyle, color: '#D4AF37' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>

@@ -79,7 +79,30 @@ export default function HomePage() {
             </span>
           )}
         </div>
-        <input type="text" placeholder="Quick search poses, shots..." style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: '#2a2a2a', color: 'white', marginTop: '10px' }} />
+        <div style={{ position: 'relative', marginTop: '10px' }}>
+          <input 
+            type="text" 
+            placeholder="Quick search poses, shots... (Press Enter)" 
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                router.push(`/poses?search=${encodeURIComponent(e.currentTarget.value.trim())}`);
+              }
+            }}
+            style={{ 
+              width: '100%', 
+              padding: '12px 42px 12px 16px', 
+              borderRadius: '10px', 
+              border: '1px solid rgba(255,255,255,0.1)', 
+              background: '#222', 
+              color: 'white', 
+              fontSize: '14px',
+              boxSizing: 'border-box'
+            }} 
+          />
+          <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '16px', pointerEvents: 'none' }}>
+            🔍
+          </span>
+        </div>
       </div>
 
       {/* Pending Shoot Assignment Banner */}

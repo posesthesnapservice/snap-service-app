@@ -1,9 +1,10 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, canAccessPhotography } from "@/lib/auth-helpers";
 import { getShotListDB, fetchShotListCloud } from "@/lib/poses-db-helpers";
+import { getTodayShootIds, toggleTodayShoot } from "@/lib/today-shoot-helpers";
 import { ShotListItem } from "@/lib/types";
 
 export default function ShotListPage() {
@@ -12,6 +13,13 @@ export default function ShotListPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeEvent, setActiveEvent] = useState("All");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [todayIds, setTodayIds] = useState<string[]>([]);
+  const [toastMsg, setToastMsg] = useState("");
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(""), 2500);
+  };
 
   useEffect(() => {
     const u = getUser();
@@ -20,12 +28,22 @@ export default function ShotListPage() {
       return;
     }
     setShots(getShotListDB());
+    setTodayIds(getTodayShootIds());
     fetchShotListCloud().then(cloudShots => {
       if (cloudShots && cloudShots.length > 0) {
         setShots(cloudShots);
       }
     }).catch(() => {});
   }, []);
+
+  const toggleToday = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const updated = toggleTodayShoot(id);
+    setTodayIds(updated);
+    const added = updated.includes(id);
+    showToast(added ? "✅ Added to Today's Shoot!" : "Removed from Today's Shoot");
+  };
 
   // Derive unique events from shots
   const events = ["All", ...Array.from(new Set(shots.map(shot => shot.event || "Other")))];
@@ -110,9 +128,26 @@ export default function ShotListPage() {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.25rem" }}>
                     <h3 style={{ fontWeight: "bold", color: "#f8fafc", margin: 0 }}>{shot.title}</h3>
-                    <span style={{ fontSize: "0.75rem", fontWeight: "500", backgroundColor: "rgba(212,175,55,0.1)", color: "#D4AF37", padding: "0.25rem 0.5rem", borderRadius: "9999px" }}>
-                      {shot.event}
-                    </span>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.75rem", fontWeight: "500", backgroundColor: "rgba(212,175,55,0.1)", color: "#D4AF37", padding: "0.25rem 0.5rem", borderRadius: "9999px" }}>
+                        {shot.event}
+                      </span>
+                      <button
+                        onClick={(e) => toggleToday(e, shot.id)}
+                        style={{
+                          background: todayIds.includes(shot.id) ? "#10b981" : "rgba(212,175,55,0.15)",
+                          border: todayIds.includes(shot.id) ? "1px solid #10b981" : "1px solid rgba(212,175,55,0.3)",
+                          color: todayIds.includes(shot.id) ? "#fff" : "#D4AF37",
+                          padding: "2px 8px",
+                          borderRadius: "12px",
+                          fontSize: "0.7rem",
+                          fontWeight: "bold",
+                          cursor: "pointer"
+                        }}
+                      >
+                        {todayIds.includes(shot.id) ? "✓ Today" : "+ Today"}
+                      </button>
+                    </div>
                   </div>
                   <p style={{ fontSize: "0.875rem", color: "#94a3b8", margin: "0 0 0.5rem 0", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{shot.description}</p>
                   
@@ -143,6 +178,28 @@ export default function ShotListPage() {
           </div>
         )}
       </div>
+
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div style={{
+          position: "fixed",
+          top: "20px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          backgroundColor: "rgba(10, 10, 15, 0.95)",
+          color: "#D4AF37",
+          padding: "10px 20px",
+          borderRadius: "30px",
+          border: "1px solid #D4AF37",
+          fontSize: "13px",
+          fontWeight: "700",
+          zIndex: 9999,
+          boxShadow: "0 8px 30px rgba(0,0,0,0.8)",
+          pointerEvents: "none"
+        }}>
+          {toastMsg}
+        </div>
+      )}
     </div>
   );
 }

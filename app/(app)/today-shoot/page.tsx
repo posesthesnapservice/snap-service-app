@@ -2,7 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getPosesDB } from '@/lib/poses-db-helpers';
+import { 
+  getPosesDB, 
+  getTrendingReelsDB, 
+  getCinematicDB, 
+  fetchPosesCloud, 
+  fetchTrendingReelsCloud, 
+  fetchCinematicCloud 
+} from '@/lib/poses-db-helpers';
 import { getUser } from '@/lib/auth-helpers';
 import { 
   getTodayShootIds, 
@@ -20,12 +27,31 @@ import {
 } from '@/lib/assignment-helpers';
 import Link from 'next/link';
 
+export interface UnifiedTodayItem {
+  id: string;
+  title: string;
+  type: 'pose' | 'reel' | 'cinematic';
+  image_url: string;
+  video_url?: string;
+  event?: string;
+  instructions?: string;
+  notes?: string;
+  camera_lens?: string;
+  camera_movement?: string;
+  orientation?: 'portrait' | 'landscape';
+}
+
 export default function TodayShootPage() {
   const router = useRouter();
   const [todayIds, setTodayIds] = useState<string[]>([]);
   const [doneIds, setDoneIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [toastMsg, setToastMsg] = useState('');
+
+  // Unified items data sources
+  const [allPoses, setAllPoses] = useState<any[]>([]);
+  const [allReels, setAllReels] = useState<any[]>([]);
+  const [allCinematic, setAllCinematic] = useState<any[]>([]);
 
   // Pending Shoot Assignment Modal States
   const [pendingAssignments, setPendingAssignments] = useState<ShootAssignment[]>([]);
@@ -42,6 +68,15 @@ export default function TodayShootPage() {
   useEffect(() => {
     setTodayIds(getTodayShootIds());
     setDoneIds(getTodayShootDoneIds());
+
+    setAllPoses(getPosesDB());
+    setAllReels(getTrendingReelsDB());
+    setAllCinematic(getCinematicDB());
+
+    // Background fetch fresh items from Supabase cloud
+    fetchPosesCloud().then(p => { if (p && p.length > 0) setAllPoses(p); }).catch(() => {});
+    fetchTrendingReelsCloud().then(r => { if (r && r.length > 0) setAllReels(r); }).catch(() => {});
+    fetchCinematicCloud().then(c => { if (c && c.length > 0) setAllCinematic(c); }).catch(() => {});
 
     const u = getUser();
     if (u) {
@@ -129,10 +164,59 @@ export default function TodayShootPage() {
     }
   };
 
-  const allPoses = getPosesDB();
-  const todayPoses = allPoses.filter((p: any) => todayIds.includes(p.id));
-  const doneCount = todayPoses.filter((p: any) => doneIds.includes(p.id)).length;
-  const totalCount = todayPoses.length;
+  // Build unified today shoot items across poses, reels, and cinematic
+  const todayItems: UnifiedTodayItem[] = [];
+  todayIds.forEach(id => {
+    // 1. Poses
+    const pose = allPoses.find((p: any) => p.id === id);
+    if (pose) {
+      todayItems.push({
+        id: pose.id,
+        title: pose.title,
+        type: 'pose',
+        image_url: pose.image_url || 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?w=800',
+        event: pose.events?.[0] || 'Pose',
+        instructions: pose.instructions,
+        notes: pose.notes,
+        camera_lens: pose.camera_lens,
+        orientation: 'portrait'
+      });
+      return;
+    }
+    // 2. Trending Reels
+    const reel = allReels.find((r: any) => r.id === id);
+    if (reel) {
+      todayItems.push({
+        id: reel.id,
+        title: reel.title,
+        type: 'reel',
+        image_url: reel.cover_image || 'https://images.unsplash.com/photo-1519741347686-cfcbf6bde2af?w=800',
+        video_url: reel.video_url,
+        event: reel.event || (reel.events && reel.events[0]) || 'Reel',
+        instructions: reel.caption || reel.description || 'Reel video idea',
+        orientation: reel.orientation || 'portrait'
+      });
+      return;
+    }
+    // 3. Cinematic Shots
+    const cine = allCinematic.find((c: any) => c.id === id);
+    if (cine) {
+      todayItems.push({
+        id: cine.id,
+        title: cine.title,
+        type: 'cinematic',
+        image_url: cine.media_url || 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800',
+        event: cine.event || 'Cinematic',
+        instructions: cine.description,
+        camera_movement: cine.camera_movement,
+        orientation: cine.orientation || 'portrait'
+      });
+      return;
+    }
+  });
+
+  const doneCount = todayItems.filter((p: any) => doneIds.includes(p.id)).length;
+  const totalCount = todayItems.length;
   const isAllDone = totalCount > 0 && doneCount === totalCount;
 
   // Swipe Handlers
@@ -164,15 +248,15 @@ export default function TodayShootPage() {
   };
 
   const navigatePose = (dir: 'next' | 'prev') => {
-    if (activeIndex === null || todayPoses.length === 0 || animatingDir !== null) return;
+    if (activeIndex === null || todayItems.length === 0 || animatingDir !== null) return;
     const flyDir = dir === 'next' ? 'left' : 'right';
     setAnimatingDir(flyDir);
 
     setTimeout(() => {
       if (dir === 'next') {
-        setActiveIndex((prev) => (prev !== null && prev < todayPoses.length - 1 ? prev + 1 : 0));
+        setActiveIndex((prev) => (prev !== null && prev < todayItems.length - 1 ? prev + 1 : 0));
       } else {
-        setActiveIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : todayPoses.length - 1));
+        setActiveIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : todayItems.length - 1));
       }
       setAnimatingDir(null);
       setSwipeOffset(0);
@@ -428,37 +512,55 @@ export default function TodayShootPage() {
           <div style={{ aspectRatio: '3 / 4', background: '#12121a', borderRadius: '10px' }}></div>
           <div style={{ aspectRatio: '3 / 4', background: '#12121a', borderRadius: '10px' }}></div>
         </div>
-      ) : todayPoses.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '50px 20px', color: '#aaa', background: '#12121a', borderRadius: '16px', border: '1px border rgba(255,255,255,0.06)' }}>
+      ) : todayItems.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '50px 20px', color: '#aaa', background: '#12121a', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ fontSize: '3rem', marginBottom: '10px' }}>⚡</div>
-          <h2 style={{ fontSize: '1.1rem', margin: '0 0 8px 0', color: '#fff', fontWeight: 'bold' }}>No shots in Today's Shoot bucket</h2>
+          <h2 style={{ fontSize: '1.1rem', margin: '0 0 8px 0', color: '#fff', fontWeight: 'bold' }}>No shots in Today&apos;s Shoot bucket</h2>
           <p style={{ fontSize: '0.85rem', color: '#888', margin: '0 0 20px 0', lineHeight: '1.5' }}>
-            Tap the <strong style={{ color: '#D4AF37' }}>+ Today</strong> button on any pose in the library to plan your shot list for today's wedding shoot!
+            Tap the <strong style={{ color: '#D4AF37' }}>+ Today</strong> button on any pose, reel, or cinematic shot to plan your shot list for today&apos;s wedding shoot!
           </p>
-          <Link 
-            href="/poses"
-            style={{
-              display: 'inline-block',
-              padding: '10px 20px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #D4AF37 0%, #B8960C 100%)',
-              color: '#000',
-              fontWeight: 'bold',
-              fontSize: '0.85rem',
-              textDecoration: 'none'
-            }}
-          >
-            Browse Pose Library →
-          </Link>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link 
+              href="/poses"
+              style={{
+                display: 'inline-block',
+                padding: '10px 18px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #D4AF37 0%, #B8960C 100%)',
+                color: '#000',
+                fontWeight: 'bold',
+                fontSize: '0.85rem',
+                textDecoration: 'none'
+              }}
+            >
+              Browse Poses →
+            </Link>
+            <Link 
+              href="/trending-reels"
+              style={{
+                display: 'inline-block',
+                padding: '10px 18px',
+                borderRadius: '10px',
+                background: 'rgba(212,175,55,0.15)',
+                border: '1px solid rgba(212,175,55,0.3)',
+                color: '#D4AF37',
+                fontWeight: 'bold',
+                fontSize: '0.85rem',
+                textDecoration: 'none'
+              }}
+            >
+              Browse Reels →
+            </Link>
+          </div>
         </div>
       ) : (
-        /* Portrait Grid for Today's Poses */
+        /* Portrait Grid for Today's Poses & Reels */
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px' }}>
-          {todayPoses.map((pose: any, idx: number) => {
-            const isCaptured = doneIds.includes(pose.id);
+          {todayItems.map((item: UnifiedTodayItem, idx: number) => {
+            const isCaptured = doneIds.includes(item.id);
             return (
               <div 
-                key={pose.id} 
+                key={item.id} 
                 onClick={() => setActiveIndex(idx)}
                 style={{ 
                   background: '#12121a', 
@@ -471,11 +573,23 @@ export default function TodayShootPage() {
                   opacity: isCaptured ? 0.75 : 1
                 }}
               >
-                <img src={pose.image_url} alt={pose.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={item.image_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 
+                {/* Media Type Badge */}
+                {item.type === 'reel' && (
+                  <div style={{ position: 'absolute', top: '6px', left: '36px', background: 'rgba(239, 68, 68, 0.9)', color: '#fff', fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px', zIndex: 2 }}>
+                    🔥 REEL
+                  </div>
+                )}
+                {item.type === 'cinematic' && (
+                  <div style={{ position: 'absolute', top: '6px', left: '36px', background: 'rgba(124, 58, 237, 0.9)', color: '#fff', fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px', zIndex: 2 }}>
+                    🎬 CINE
+                  </div>
+                )}
+
                 {/* Captured Checkmark Button */}
                 <button 
-                  onClick={(e) => handleToggleDone(e, pose.id)} 
+                  onClick={(e) => handleToggleDone(e, item.id)} 
                   style={{
                     position: 'absolute',
                     top: '6px',
@@ -492,7 +606,7 @@ export default function TodayShootPage() {
                     color: 'white',
                     fontSize: '12px',
                     padding: 0,
-                    zIndex: 2
+                    zIndex: 3
                   }}
                   title={isCaptured ? "Mark as pending" : "Mark as captured"}
                 >
@@ -501,7 +615,7 @@ export default function TodayShootPage() {
 
                 {/* Remove from Today Button */}
                 <button 
-                  onClick={(e) => handleRemoveFromToday(e, pose.id)} 
+                  onClick={(e) => handleRemoveFromToday(e, item.id)} 
                   style={{
                     position: 'absolute',
                     top: '6px',
@@ -518,7 +632,7 @@ export default function TodayShootPage() {
                     color: '#ef4444',
                     fontSize: '12px',
                     padding: 0,
-                    zIndex: 2
+                    zIndex: 3
                   }}
                   title="Remove from Today"
                 >
@@ -527,7 +641,7 @@ export default function TodayShootPage() {
 
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '6px', background: 'linear-gradient(transparent, rgba(0,0,0,0.9))' }}>
                   <h3 style={{ margin: 0, fontSize: '0.75rem', color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: isCaptured ? 'line-through' : 'none' }}>
-                    {pose.title}
+                    {item.title}
                   </h3>
                 </div>
               </div>
@@ -537,7 +651,7 @@ export default function TodayShootPage() {
       )}
 
       {/* Dating App Style Swipeable Popup Modal */}
-      {activeIndex !== null && todayPoses[activeIndex] && (
+      {activeIndex !== null && todayItems[activeIndex] && (
         <div 
           style={{
             position: 'fixed',
@@ -583,11 +697,23 @@ export default function TodayShootPage() {
             }}
           >
             <div style={{ flex: 1, position: 'relative', width: '100%', overflow: 'hidden' }}>
-              <img 
-                src={todayPoses[activeIndex].image_url} 
-                alt={todayPoses[activeIndex].title} 
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-              />
+              {todayItems[activeIndex].video_url ? (
+                <video 
+                  src={todayItems[activeIndex].video_url} 
+                  autoPlay 
+                  loop 
+                  playsInline 
+                  controls
+                  poster={todayItems[activeIndex].image_url}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                />
+              ) : (
+                <img 
+                  src={todayItems[activeIndex].image_url} 
+                  alt={todayItems[activeIndex].title} 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                />
+              )}
               
               <button 
                 onClick={() => setActiveIndex(null)}
@@ -606,7 +732,7 @@ export default function TodayShootPage() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  zIndex: 2,
+                  zIndex: 4,
                   backdropFilter: 'blur(5px)',
                   padding: 0
                 }}
@@ -616,14 +742,14 @@ export default function TodayShootPage() {
 
               {/* Mark Captured Toggle Button */}
               <button 
-                onClick={(e) => handleToggleDone(e, todayPoses[activeIndex].id)}
+                onClick={(e) => handleToggleDone(e, todayItems[activeIndex].id)}
                 style={{
                   position: 'absolute',
                   top: '12px',
                   right: '12px',
                   padding: '6px 10px',
                   borderRadius: '20px',
-                  background: doneIds.includes(todayPoses[activeIndex].id) ? '#10b981' : 'rgba(0,0,0,0.6)',
+                  background: doneIds.includes(todayItems[activeIndex].id) ? '#10b981' : 'rgba(0,0,0,0.6)',
                   border: '1px solid rgba(255,255,255,0.1)',
                   color: 'white',
                   fontSize: '12px',
@@ -632,11 +758,11 @@ export default function TodayShootPage() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '4px',
-                  zIndex: 2,
+                  zIndex: 4,
                   backdropFilter: 'blur(5px)'
                 }}
               >
-                {doneIds.includes(todayPoses[activeIndex].id) ? '✓ Captured' : 'Mark Done'}
+                {doneIds.includes(todayItems[activeIndex].id) ? '✓ Captured' : 'Mark Done'}
               </button>
 
               {/* Swipe Indicators */}
@@ -653,15 +779,28 @@ export default function TodayShootPage() {
             </div>
 
             <div style={{ padding: '12px', background: 'linear-gradient(to top, #0a0a0f 80%, rgba(10,10,15,0))', position: 'relative' }}>
-              <h2 style={{ margin: '0 0 6px 0', fontSize: '0.95rem', color: 'white', fontWeight: 'bold' }}>{todayPoses[activeIndex].title}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <span style={{ 
+                  background: todayItems[activeIndex].type === 'reel' ? '#ef4444' : todayItems[activeIndex].type === 'cinematic' ? '#7c3aed' : '#D4AF37', 
+                  color: todayItems[activeIndex].type === 'pose' ? '#000' : '#fff',
+                  fontSize: '9px', 
+                  fontWeight: 'bold', 
+                  padding: '1px 6px', 
+                  borderRadius: '4px' 
+                }}>
+                  {todayItems[activeIndex].type.toUpperCase()}
+                </span>
+                <span style={{ fontSize: '11px', color: '#888' }}>{todayItems[activeIndex].event}</span>
+              </div>
+              <h2 style={{ margin: '0 0 6px 0', fontSize: '0.95rem', color: 'white', fontWeight: 'bold' }}>{todayItems[activeIndex].title}</h2>
               
               <p style={{ margin: 0, fontSize: '0.72rem', color: '#aaa', lineHeight: '1.4', maxHeight: '60px', overflowY: 'auto' }}>
-                {todayPoses[activeIndex].instructions}
+                {todayItems[activeIndex].instructions}
               </p>
 
               <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
                 <button
-                  onClick={(e) => handleRemoveFromToday(e, todayPoses[activeIndex].id)}
+                  onClick={(e) => handleRemoveFromToday(e, todayItems[activeIndex].id)}
                   style={{
                     flex: 1,
                     padding: '8px',
@@ -676,23 +815,43 @@ export default function TodayShootPage() {
                 >
                   Remove from Today
                 </button>
-                <Link 
-                  href={`/poses/${todayPoses[activeIndex].id}`}
-                  style={{
-                    flex: 1,
-                    textAlign: 'center',
-                    padding: '8px',
-                    borderRadius: '8px',
-                    background: 'rgba(212,175,55,0.1)',
-                    border: '1px solid rgba(212,175,55,0.2)',
-                    color: '#D4AF37',
-                    fontSize: '0.72rem',
-                    fontWeight: 'bold',
-                    textDecoration: 'none',
-                  }}
-                >
-                  Specs →
-                </Link>
+                {todayItems[activeIndex].type === 'pose' ? (
+                  <Link 
+                    href={`/poses/${todayItems[activeIndex].id}`}
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '8px',
+                      borderRadius: '8px',
+                      background: 'rgba(212,175,55,0.1)',
+                      border: '1px solid rgba(212,175,55,0.2)',
+                      color: '#D4AF37',
+                      fontSize: '0.72rem',
+                      fontWeight: 'bold',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Specs →
+                  </Link>
+                ) : (
+                  <Link 
+                    href={todayItems[activeIndex].type === 'reel' ? '/trending-reels' : '/cinematic'}
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '8px',
+                      borderRadius: '8px',
+                      background: 'rgba(212,175,55,0.1)',
+                      border: '1px solid rgba(212,175,55,0.2)',
+                      color: '#D4AF37',
+                      fontSize: '0.72rem',
+                      fontWeight: 'bold',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    View Source →
+                  </Link>
+                )}
               </div>
             </div>
           </div>

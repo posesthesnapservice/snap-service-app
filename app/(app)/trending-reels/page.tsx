@@ -17,6 +17,12 @@ export default function TrendingReelsPage() {
   const [todayIds, setTodayIds] = useState<string[]>([]);
   const [activeVideo, setActiveVideo] = useState<TrendingReel | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 2200);
+  };
 
   const handleManualSync = async () => {
     setSyncing(true);
@@ -51,10 +57,13 @@ export default function TrendingReelsPage() {
     e.preventDefault();
     e.stopPropagation();
     let newFavs = [...favorites];
-    if (newFavs.includes(id)) {
+    const isRemoving = newFavs.includes(id);
+    if (isRemoving) {
       newFavs = newFavs.filter(fid => fid !== id);
+      showToast('🤍 Removed from Favorites');
     } else {
       newFavs.push(id);
+      showToast('❤️ Added to Favorites!');
     }
     setFavorites(newFavs);
     localStorage.setItem('snap_favorites', JSON.stringify(newFavs));
@@ -65,6 +74,8 @@ export default function TrendingReelsPage() {
     e.stopPropagation();
     const updated = toggleTodayShoot(id);
     setTodayIds(updated);
+    const isAdded = updated.includes(id);
+    showToast(isAdded ? "✅ Added to Today's Shoot!" : "Removed from Today's Shoot");
   };
 
   const filtered = reels.filter(r => {
@@ -78,6 +89,29 @@ export default function TrendingReelsPage() {
 
   return (
     <div style={{ padding: '16px', color: '#fff', minHeight: '100vh', background: '#0a0a0f' }}>
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: '#1e1b10',
+          color: '#D4AF37',
+          border: '1px solid #D4AF37',
+          padding: '10px 20px',
+          borderRadius: '9999px',
+          fontSize: '13px',
+          fontWeight: '600',
+          zIndex: 3000,
+          boxShadow: '0 10px 30px rgba(0,0,0,0.8)',
+          pointerEvents: 'none',
+          animation: 'fadeIn 0.2s ease',
+        }}>
+          {toastMsg}
+        </div>
+      )}
+
       {/* Title */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', gap: '10px' }}>
         <div>
@@ -221,7 +255,7 @@ export default function TrendingReelsPage() {
                 </div>
 
                 {/* Quick Action Overlay Buttons */}
-                <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: '6px' }}>
+                <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: '6px', zIndex: 40 }}>
                   <button 
                     onClick={e => toggleToday(e, reel.id)} 
                     style={{ 
@@ -256,6 +290,7 @@ export default function TrendingReelsPage() {
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}
+                    title={isFav ? "Remove from favorites" : "Add to favorites"}
                   >
                     {isFav ? '❤️' : '🤍'}
                   </button>
@@ -288,7 +323,7 @@ export default function TrendingReelsPage() {
               position: 'relative', 
               borderRadius: '16px', 
               overflow: 'hidden', 
-              background: '#000',
+              background: '#000', 
               border: '1px solid rgba(212,175,55,0.4)',
               boxShadow: '0 20px 50px rgba(0,0,0,0.9)'
             }}>
@@ -301,13 +336,50 @@ export default function TrendingReelsPage() {
                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
               />
             </div>
-            <div style={{ marginTop: '14px', color: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <span style={{ background: '#D4AF37', color: '#000', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{activeVideo.event}</span>
-                <span style={{ fontSize: '11px', color: '#888' }}>{(activeVideo.orientation || 'portrait') === 'portrait' ? '📱 9:16 Vertical Reel' : '🖥️ 16:9 Widescreen Film'}</span>
+            <div style={{ marginTop: '14px', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span style={{ background: '#D4AF37', color: '#000', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{activeVideo.event}</span>
+                  <span style={{ fontSize: '11px', color: '#888' }}>{(activeVideo.orientation || 'portrait') === 'portrait' ? '📱 9:16 Vertical Reel' : '🖥️ 16:9 Widescreen Film'}</span>
+                </div>
+                <h2 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: 'bold', color: '#D4AF37' }}>{activeVideo.title}</h2>
+                <p style={{ margin: 0, fontSize: '13px', color: '#ccc', lineHeight: '1.4' }}>{activeVideo.description}</p>
               </div>
-              <h2 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: 'bold', color: '#D4AF37' }}>{activeVideo.title}</h2>
-              <p style={{ margin: 0, fontSize: '13px', color: '#ccc', lineHeight: '1.4' }}>{activeVideo.description}</p>
+
+              {/* Action buttons inside player */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={(e) => toggleToday(e, activeVideo.id)}
+                  style={{
+                    background: todayIds.includes(activeVideo.id) ? '#10b981' : '#D4AF37',
+                    color: '#000',
+                    border: 'none',
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {todayIds.includes(activeVideo.id) ? '✓ In Today' : '+ Today'}
+                </button>
+                <button
+                  onClick={(e) => toggleFav(e, activeVideo.id)}
+                  style={{
+                    background: favorites.includes(activeVideo.id) ? 'rgba(239,68,68,0.9)' : 'rgba(255,255,255,0.15)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                  }}
+                  title={favorites.includes(activeVideo.id) ? "Remove from favorites" : "Add to favorites"}
+                >
+                  {favorites.includes(activeVideo.id) ? '❤️' : '🤍'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
