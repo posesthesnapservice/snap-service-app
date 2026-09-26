@@ -1,8 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getUsersDB, saveUsersDB, toggleUserAccess, UserAccount } from '@/lib/auth-helpers';
-import { getPasswordResets, resolvePasswordReset, PasswordResetRequest } from '@/lib/password-reset-helpers';
+import { 
+  getUsersDB, 
+  saveUsersDB, 
+  toggleUserAccess, 
+  UserAccount,
+  fetchUsersCloud,
+  upsertUserCloud,
+  deleteUserCloud
+} from '@/lib/auth-helpers';
+import { 
+  getPasswordResets, 
+  resolvePasswordReset, 
+  PasswordResetRequest,
+  fetchPasswordResetsCloud 
+} from '@/lib/password-reset-helpers';
 import { UserRole } from '@/lib/types';
 
 // SVG Icons
@@ -56,8 +69,17 @@ export default function AdminUsers() {
   const [activeResetReqId, setActiveResetReqId] = useState<string | null>(null);
 
   useEffect(() => {
+    // 1. Instant local load
     setUsers(getUsersDB());
     setResets(getPasswordResets());
+
+    // 2. Cloud sync for cross-device consistency (PC <-> Mobile)
+    fetchUsersCloud().then(cloudUsers => {
+      if (cloudUsers && cloudUsers.length > 0) setUsers(cloudUsers);
+    });
+    fetchPasswordResetsCloud().then(cloudResets => {
+      if (cloudResets && cloudResets.length > 0) setResets(cloudResets);
+    });
   }, []);
 
   const [showModal, setShowModal] = useState(false);
@@ -74,6 +96,7 @@ export default function AdminUsers() {
       const updated = users.filter(u => u.id !== id);
       setUsers(updated);
       saveUsersDB(updated);
+      deleteUserCloud(id);
     }
   };
 
@@ -81,17 +104,31 @@ export default function AdminUsers() {
     e.preventDefault();
     if (!newUser.name.trim() || !newUser.email.trim()) return;
 
+    // Minimum password security check if changing or adding
+    if (newUser.password.trim() && newUser.password.trim().length < 4) {
+      alert('Password must be at least 4 characters long.');
+      return;
+    }
+
     let updated: UserAccount[];
     if (editingUserId) {
       // Update
-      updated = users.map(u => u.id === editingUserId ? {
-        ...u,
-        name: newUser.name.trim(),
-        email: newUser.email.trim(),
-        username: newUser.username.trim() || undefined,
-        role: newUser.role,
-        ...(newUser.password.trim() ? { password: newUser.password.trim() } : {})
-      } : u);
+      let changedUser: UserAccount | undefined;
+      updated = users.map(u => {
+        if (u.id === editingUserId) {
+          changedUser = {
+            ...u,
+            name: newUser.name.trim(),
+            email: newUser.email.trim(),
+            username: newUser.username.trim() || undefined,
+            role: newUser.role,
+            ...(newUser.password.trim() ? { password: newUser.password.trim() } : {})
+          };
+          return changedUser;
+        }
+        return u;
+      });
+      if (changedUser) upsertUserCloud(changedUser);
     } else {
       // Add
       const created: UserAccount = {
@@ -105,6 +142,7 @@ export default function AdminUsers() {
         created_at: new Date().toISOString()
       };
       updated = [...users, created];
+      upsertUserCloud(created);
     }
 
     setUsers(updated);
