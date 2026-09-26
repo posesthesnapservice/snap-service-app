@@ -83,7 +83,7 @@ export default function BottomNav() {
     if (u?.role) {
       setRole(u.role);
     }
-  }, []);
+  }, [pathname]);
 
   const hasPhoto = canAccessPhotography(role);
   const hasVideo = canAccessVideography(role);

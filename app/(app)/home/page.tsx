@@ -38,8 +38,37 @@ export default function HomePage() {
           <img src="/logo.png" alt="Snap Service Logo" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #D4AF37' }} />
           <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 'bold', color: '#D4AF37' }}>Snap Service</h1>
         </div>
-        <span style={{ fontSize: '0.8rem', background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '12px' }}>Synced just now</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.8rem', background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '12px' }}>Synced just now</span>
+          <button 
+            onClick={() => {
+              localStorage.removeItem('snap_user');
+              router.push('/login');
+            }}
+            style={{
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              color: '#ef4444',
+              padding: '4px 10px',
+              borderRadius: '8px',
+              fontSize: '0.75rem',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+          >
+            🚪 Logout
+          </button>
+        </div>
       </header>
+
+      {user?.role === 'admin' && (
+        <div style={{ backgroundColor: 'rgba(192,132,252,0.1)', border: '1px solid rgba(192,132,252,0.3)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#c084fc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <span>👑 <strong>Admin Mode Active:</strong> You have full master access to all photo &amp; video tools. To preview as Cinematographer or Photographer, logout and sign in as that user.</span>
+          <Link href="/admin" style={{ color: '#fff', backgroundColor: '#7c3aed', padding: '4px 10px', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold', fontSize: '11px', whiteSpace: 'nowrap' }}>
+            Admin Panel →
+          </Link>
+        </div>
+      )}
 
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
