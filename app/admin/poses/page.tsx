@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Pose } from '@/lib/types';
-import { getPosesDB, savePosesDB } from '@/lib/poses-db-helpers';
+import { getPosesDB, savePosesDB, fetchPosesCloud } from '@/lib/poses-db-helpers';
 
 // SVG Icons
 const PlusIcon = () => (
@@ -52,6 +52,11 @@ export default function AdminPoses() {
 
   useEffect(() => {
     setPoses(getPosesDB());
+    fetchPosesCloud().then(cloudPoses => {
+      if (cloudPoses && cloudPoses.length > 0) {
+        setPoses(cloudPoses);
+      }
+    }).catch(() => {});
   }, []);
 
   // Filtering

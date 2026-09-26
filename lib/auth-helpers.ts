@@ -210,6 +210,17 @@ export function login(identifier: string, password: string): { user: AuthUser | 
   return { user: authUser };
 }
 
+export async function loginAsync(identifier: string, password: string): Promise<{ user: AuthUser | null; error?: string }> {
+  // Try local first for instant response
+  const localRes = login(identifier, password);
+  if (localRes.user || (localRes.error && localRes.error.includes('Account Disabled'))) {
+    return localRes;
+  }
+  // If not found, fetch from Supabase cloud (e.g. newly created user or modified role on PC)
+  await fetchUsersCloud();
+  return login(identifier, password);
+}
+
 export function logout(): void {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('snap_user');

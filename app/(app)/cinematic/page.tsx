@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, canAccessVideography } from "@/lib/auth-helpers";
-import { getCinematicDB } from "@/lib/poses-db-helpers";
+import { getCinematicDB, fetchCinematicCloud } from "@/lib/poses-db-helpers";
 import { CinematicShot } from "@/lib/types";
 
 export default function CinematicShotsPage() {
@@ -19,6 +19,11 @@ export default function CinematicShotsPage() {
       return;
     }
     setShots(getCinematicDB().filter((s: any) => s.status !== 'hidden'));
+    fetchCinematicCloud().then(cloudShots => {
+      if (cloudShots && cloudShots.length > 0) {
+        setShots(cloudShots.filter((s: any) => s.status !== 'hidden'));
+      }
+    }).catch(() => {});
   }, []);
 
   const categories = ["All", ...Array.from(new Set(shots.map(shot => shot.event || shot.camera_movement || "Other")))];

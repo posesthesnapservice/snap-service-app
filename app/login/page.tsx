@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { login, getUser } from '../../lib/auth-helpers';
+import { login, loginAsync, getUser, fetchUsersCloud } from '../../lib/auth-helpers';
 import { requestPasswordReset } from '../../lib/password-reset-helpers';
 
 export default function LoginPage() {
@@ -25,6 +25,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     setMounted(true);
+    // Background sync users from Supabase so any newly created user from PC is available
+    fetchUsersCloud().catch(() => {});
+
     // Pre-fill remembered username/email
     try {
       const saved = localStorage.getItem('snap_remember_identifier');
@@ -43,16 +46,15 @@ export default function LoginPage() {
     }
   }, []); // ← empty deps: only run ONCE on mount, never on router changes
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
     setError(false);
     setErrorMessage('');
 
-    // Small delay for UX feedback, then authenticate
-    setTimeout(() => {
-      const res = login(identifier, password);
+    try {
+      const res = await loginAsync(identifier, password);
       if (res.user) {
         if (rememberMe) {
           try { localStorage.setItem('snap_remember_identifier', identifier.trim()); } catch (e) {}
@@ -66,7 +68,11 @@ export default function LoginPage() {
         setError(true);
         setLoading(false);
       }
-    }, 400);
+    } catch {
+      setErrorMessage('Network or authentication error. Please try again.');
+      setError(true);
+      setLoading(false);
+    }
   };
 
   const handleSendReset = (e: React.FormEvent) => {

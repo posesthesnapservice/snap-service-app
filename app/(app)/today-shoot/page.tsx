@@ -9,7 +9,8 @@ import {
   toggleTodayShoot, 
   clearTodayShoot, 
   getTodayShootDoneIds, 
-  toggleTodayShootDone 
+  toggleTodayShootDone,
+  fetchTodayShootCloud 
 } from '@/lib/today-shoot-helpers';
 import { 
   getPendingAssignmentsForUser, 
@@ -44,6 +45,12 @@ export default function TodayShootPage() {
 
     const u = getUser();
     if (u) {
+      // Sync personal Today Shoot list from Supabase cloud
+      fetchTodayShootCloud(u.id).then(({ poseIds, doneIds }) => {
+        if (poseIds) setTodayIds(poseIds);
+        if (doneIds) setDoneIds(doneIds);
+      }).catch(() => {});
+
       const pending = getPendingAssignmentsForUser(u.id);
       setPendingAssignments(pending);
       if (pending.length > 0) {

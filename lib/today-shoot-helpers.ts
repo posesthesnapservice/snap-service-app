@@ -1,10 +1,12 @@
-// Helper module to manage user-specific Today's Shoot selection in localStorage
+// Helper module to manage user-specific Today's Shoot selection (localStorage + Supabase Cloud Sync)
 import { getUser } from './auth-helpers';
+import { supabase } from './supabase';
 
 function getKeys(targetUserId?: string) {
   const u = getUser();
   const userId = targetUserId || u?.id || 'guest';
   return {
+    userId,
     shootKey: `snap_today_shoot_${userId}`,
     doneKey: `snap_today_shoot_done_${userId}`,
   };
@@ -26,7 +28,7 @@ export function isTodayShoot(poseId: string): boolean {
 
 export function toggleTodayShoot(poseId: string): string[] {
   if (typeof window === 'undefined') return [];
-  const { shootKey } = getKeys();
+  const { userId, shootKey } = getKeys();
   const current = getTodayShootIds();
   let updated: string[];
   if (current.includes(poseId)) {
@@ -39,6 +41,10 @@ export function toggleTodayShoot(poseId: string): string[] {
   } catch (e) {
     console.error('Failed to update Today Shoot list:', e);
   }
+
+  // Cloud sync
+  syncTodayShootCloud(userId, updated, getTodayShootDoneIds(userId));
+
   return updated;
 }
 
@@ -47,7 +53,7 @@ export function toggleTodayShoot(poseId: string): string[] {
  */
 export function mergeTodayShootItems(newIds: string[], targetUserId?: string): string[] {
   if (typeof window === 'undefined') return [];
-  const { shootKey } = getKeys(targetUserId);
+  const { userId, shootKey } = getKeys(targetUserId);
   const current = getTodayShootIds(targetUserId);
   const mergedSet = new Set([...current, ...newIds]);
   const updated = Array.from(mergedSet);
@@ -56,6 +62,10 @@ export function mergeTodayShootItems(newIds: string[], targetUserId?: string): s
   } catch (e) {
     console.error('Failed to merge Today Shoot list:', e);
   }
+
+  // Cloud sync
+  syncTodayShootCloud(userId, updated, getTodayShootDoneIds(userId));
+
   return updated;
 }
 
@@ -64,7 +74,7 @@ export function mergeTodayShootItems(newIds: string[], targetUserId?: string): s
  */
 export function replaceTodayShootItems(newIds: string[], targetUserId?: string): string[] {
   if (typeof window === 'undefined') return [];
-  const { shootKey, doneKey } = getKeys(targetUserId);
+  const { userId, shootKey, doneKey } = getKeys(targetUserId);
   const updated = Array.from(new Set(newIds));
   try {
     localStorage.setItem(shootKey, JSON.stringify(updated));
@@ -73,15 +83,20 @@ export function replaceTodayShootItems(newIds: string[], targetUserId?: string):
   } catch (e) {
     console.error('Failed to replace Today Shoot list:', e);
   }
+
+  // Cloud sync
+  syncTodayShootCloud(userId, updated, []);
+
   return updated;
 }
 
 export function clearTodayShoot(targetUserId?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    const { shootKey, doneKey } = getKeys(targetUserId);
+    const { userId, shootKey, doneKey } = getKeys(targetUserId);
     localStorage.removeItem(shootKey);
     localStorage.removeItem(doneKey);
+    syncTodayShootCloud(userId, [], []);
   } catch (e) {
     console.error('Failed to clear Today Shoot list:', e);
   }
@@ -99,7 +114,7 @@ export function getTodayShootDoneIds(targetUserId?: string): string[] {
 
 export function toggleTodayShootDone(poseId: string): string[] {
   if (typeof window === 'undefined') return [];
-  const { doneKey } = getKeys();
+  const { userId, doneKey } = getKeys();
   const current = getTodayShootDoneIds();
   let updated: string[];
   if (current.includes(poseId)) {
@@ -112,6 +127,61 @@ export function toggleTodayShootDone(poseId: string): string[] {
   } catch (e) {
     console.error('Failed to update Today Shoot Done state:', e);
   }
+
+  // Cloud sync
+  syncTodayShootCloud(userId, getTodayShootIds(userId), updated);
+
   return updated;
 }
 
+// --- SUPABASE CLOUD SYNC FOR TODAY'S SHOOT ---
+
+export function syncTodayShootCloud(userId: string, poseIds: string[], doneIds: string[]): void {
+  if (!userId || userId === 'guest') return;
+  const u = getUser();
+  try {
+    supabase.from('snap_today_shoots').upsert([{
+      id: userId,
+      user_id: userId,
+      user_name: u?.name || 'Photographer',
+      pose_ids: poseIds,
+      done_ids: doneIds,
+      updated_at: new Date().toISOString()
+    }], { onConflict: 'user_id' }).then((res) => {
+      if (res?.error) console.info('Supabase today shoot sync notice:', res.error.message);
+    });
+  } catch (e) {
+    // Graceful offline fallback
+  }
+}
+
+export async function fetchTodayShootCloud(targetUserId?: string): Promise<{ poseIds: string[]; doneIds: string[] }> {
+  const { userId, shootKey, doneKey } = getKeys(targetUserId);
+  if (!userId || userId === 'guest') {
+    return { poseIds: getTodayShootIds(), doneIds: getTodayShootDoneIds() };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('snap_today_shoots')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return { poseIds: getTodayShootIds(userId), doneIds: getTodayShootDoneIds(userId) };
+    }
+
+    const cloudPoseIds: string[] = data.pose_ids || [];
+    const cloudDoneIds: string[] = data.done_ids || [];
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(shootKey, JSON.stringify(cloudPoseIds));
+      localStorage.setItem(doneKey, JSON.stringify(cloudDoneIds));
+    }
+
+    return { poseIds: cloudPoseIds, doneIds: cloudDoneIds };
+  } catch {
+    return { poseIds: getTodayShootIds(userId), doneIds: getTodayShootDoneIds(userId) };
+  }
+}

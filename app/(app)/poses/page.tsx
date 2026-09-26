@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getTodayShootIds, toggleTodayShoot } from '@/lib/today-shoot-helpers';
-import { getPosesDB } from '@/lib/poses-db-helpers';
+import { getPosesDB, fetchPosesCloud } from '@/lib/poses-db-helpers';
 import { Pose } from '@/lib/types';
 import { getUser, canAccessPhotography } from '@/lib/auth-helpers';
 
@@ -41,6 +41,14 @@ export default function PosesPage() {
     const favs = JSON.parse(localStorage.getItem('snap_favorites') || '[]');
     setFavorites(favs);
     setTodayIds(getTodayShootIds());
+
+    // Sync cloud poses from Supabase
+    fetchPosesCloud().then(cloudPoses => {
+      if (cloudPoses && cloudPoses.length > 0) {
+        setPosesList(cloudPoses);
+      }
+    }).catch(() => {});
+
     const t = setTimeout(() => setLoading(false), 300);
     return () => clearTimeout(t);
   }, []);

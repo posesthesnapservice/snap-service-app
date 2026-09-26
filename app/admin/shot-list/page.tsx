@@ -1,7 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { mockShotList as initialShots } from '@/lib/mock-data';
+import { useState, useEffect } from 'react';
+import { 
+  getShotListDB, 
+  addShotListDB, 
+  updateShotListDB, 
+  deleteShotListDB, 
+  fetchShotListCloud 
+} from '@/lib/poses-db-helpers';
 import { ShotListItem } from '@/lib/types';
 
 // SVG Icons
@@ -43,7 +49,7 @@ const XIcon = () => (
 );
 
 export default function AdminShotList() {
-  const [shots, setShots] = useState<ShotListItem[]>(initialShots);
+  const [shots, setShots] = useState<ShotListItem[]>([]);
   const [showForm, setShowForm] = useState(false);
 
   // New Item State
@@ -56,6 +62,15 @@ export default function AdminShotList() {
 
   // Editing State
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setShots(getShotListDB());
+    fetchShotListCloud().then(cloudShots => {
+      if (cloudShots && cloudShots.length > 0) {
+        setShots(cloudShots);
+      }
+    }).catch(() => {});
+  }, []);
 
   const handleAddShot = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +87,8 @@ export default function AdminShotList() {
       created_at: new Date().toISOString()
     };
 
-    setShots([newShot, ...shots]);
+    const updated = addShotListDB(newShot);
+    setShots(updated);
     resetForm();
     setShowForm(false);
   };
@@ -88,7 +104,8 @@ export default function AdminShotList() {
 
   const deleteShot = (id: string) => {
     if (confirm('Are you sure you want to delete this shot list item?')) {
-      setShots(shots.filter(s => s.id !== id));
+      const updated = deleteShotListDB(id);
+      setShots(updated);
     }
   };
 
@@ -108,17 +125,18 @@ export default function AdminShotList() {
   const handleUpdateShot = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return alert('Title is required');
+    if (!editingId) return;
 
-    setShots(shots.map(s => s.id === editingId ? {
-      ...s,
+    const updated = updateShotListDB(editingId, {
       title: title.trim(),
       description: description.trim(),
       event: event || undefined,
       instructions: instructions.trim() || undefined,
       tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
       image_url: imageUrl || undefined,
-    } : s));
+    });
 
+    setShots(updated);
     setEditingId(null);
     resetForm();
     setShowForm(false);

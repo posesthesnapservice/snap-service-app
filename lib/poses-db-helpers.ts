@@ -130,6 +130,55 @@ export function saveShotListDB(items: ShotListItem[]): void {
   }
 }
 
+export function addShotListDB(newItem: ShotListItem): ShotListItem[] {
+  const current = getShotListDB();
+  const updated = [newItem, ...current.filter(i => i.id !== newItem.id)];
+  saveShotListDB(updated);
+
+  supabase.from('snap_shotlist').upsert([{
+    id: newItem.id,
+    title: newItem.title,
+    description: newItem.description || '',
+    event: newItem.event || null,
+    instructions: newItem.instructions || null,
+    image_url: newItem.image_url || null,
+    tags: newItem.tags || []
+  }], { onConflict: 'id' }).then((res) => {
+    if (res?.error) console.info('Supabase ShotList sync notice:', res.error.message);
+  });
+
+  return updated;
+}
+
+export function updateShotListDB(id: string, partial: Partial<ShotListItem>): ShotListItem[] {
+  const current = getShotListDB();
+  const updated = current.map(item => item.id === id ? { ...item, ...partial } : item);
+  saveShotListDB(updated);
+
+  supabase.from('snap_shotlist').update(partial).eq('id', id).then((res) => {
+    if (res?.error) console.info('Supabase ShotList update notice:', res.error.message);
+  });
+
+  return updated;
+}
+
+export function deleteShotListDB(id: string): ShotListItem[] {
+  const current = getShotListDB();
+  const toDelete = current.find(i => i.id === id);
+  const updated = current.filter(i => i.id !== id);
+  saveShotListDB(updated);
+
+  supabase.from('snap_shotlist').delete().eq('id', id).then((res) => {
+    if (res?.error) console.info('Supabase ShotList delete notice:', res.error.message);
+  });
+
+  if (toDelete?.image_url) {
+    deleteMediaFromCloudinary(toDelete.image_url);
+  }
+
+  return updated;
+}
+
 // --- CINEMATIC SHOTS DB ---
 export function getCinematicDB(): CinematicShot[] {
   if (typeof window === 'undefined') return mockCinematicShots;
@@ -152,6 +201,58 @@ export function saveCinematicDB(items: CinematicShot[]): void {
   } catch (e) {
     console.error('Failed to save cinematic DB:', e);
   }
+}
+
+export function addCinematicDB(newItem: CinematicShot): CinematicShot[] {
+  const current = getCinematicDB();
+  const updated = [newItem, ...current.filter(i => i.id !== newItem.id)];
+  saveCinematicDB(updated);
+
+  supabase.from('snap_cinematic').upsert([{
+    id: newItem.id,
+    title: newItem.title,
+    description: newItem.description || '',
+    media_url: newItem.media_url || null,
+    camera_movement: newItem.camera_movement || null,
+    framing: newItem.framing || null,
+    event: newItem.event || null,
+    orientation: newItem.orientation || 'portrait',
+    status: newItem.status || 'published',
+    tags: newItem.tags || []
+  }], { onConflict: 'id' }).then((res) => {
+    if (res?.error) console.info('Supabase Cinematic sync notice:', res.error.message);
+  });
+
+  return updated;
+}
+
+export function updateCinematicDB(id: string, partial: Partial<CinematicShot>): CinematicShot[] {
+  const current = getCinematicDB();
+  const updated = current.map(item => item.id === id ? { ...item, ...partial } : item);
+  saveCinematicDB(updated);
+
+  supabase.from('snap_cinematic').update(partial).eq('id', id).then((res) => {
+    if (res?.error) console.info('Supabase Cinematic update notice:', res.error.message);
+  });
+
+  return updated;
+}
+
+export function deleteCinematicDB(id: string): CinematicShot[] {
+  const current = getCinematicDB();
+  const toDelete = current.find(i => i.id === id);
+  const updated = current.filter(i => i.id !== id);
+  saveCinematicDB(updated);
+
+  supabase.from('snap_cinematic').delete().eq('id', id).then((res) => {
+    if (res?.error) console.info('Supabase Cinematic delete notice:', res.error.message);
+  });
+
+  if (toDelete?.media_url) {
+    deleteMediaFromCloudinary(toDelete.media_url);
+  }
+
+  return updated;
 }
 
 // --- TRENDING REELS DB ---
@@ -305,5 +406,70 @@ export async function fetchPosesCloud(): Promise<Pose[]> {
     return mapped;
   } catch {
     return getPosesDB();
+  }
+}
+
+export async function fetchShotListCloud(): Promise<ShotListItem[]> {
+  try {
+    const { data, error } = await supabase.from('snap_shotlist').select('*').order('created_at', { ascending: false });
+    if (error || !data || data.length === 0) {
+      return getShotListDB();
+    }
+    const mapped: ShotListItem[] = data.map((d: any) => ({
+      id: d.id,
+      title: d.title,
+      description: d.description || '',
+      event: d.event || undefined,
+      instructions: d.instructions || undefined,
+      image_url: d.image_url || undefined,
+      tags: d.tags || [],
+      created_at: d.created_at || new Date().toISOString()
+    }));
+
+    const local = getShotListDB();
+    const map = new Map<string, ShotListItem>();
+    mapped.forEach(item => map.set(item.id, item));
+    local.forEach(item => {
+      if (!map.has(item.id)) map.set(item.id, item);
+    });
+    const merged = Array.from(map.values());
+    saveShotListDB(merged);
+    return merged;
+  } catch {
+    return getShotListDB();
+  }
+}
+
+export async function fetchCinematicCloud(): Promise<CinematicShot[]> {
+  try {
+    const { data, error } = await supabase.from('snap_cinematic').select('*').order('created_at', { ascending: false });
+    if (error || !data || data.length === 0) {
+      return getCinematicDB();
+    }
+    const mapped: CinematicShot[] = data.map((d: any) => ({
+      id: d.id,
+      title: d.title,
+      description: d.description || '',
+      media_url: d.media_url || undefined,
+      camera_movement: d.camera_movement || undefined,
+      framing: d.framing || undefined,
+      event: d.event || undefined,
+      orientation: d.orientation || 'portrait',
+      status: d.status || 'published',
+      tags: d.tags || [],
+      created_at: d.created_at || new Date().toISOString()
+    }));
+
+    const local = getCinematicDB();
+    const map = new Map<string, CinematicShot>();
+    mapped.forEach(item => map.set(item.id, item));
+    local.forEach(item => {
+      if (!map.has(item.id)) map.set(item.id, item);
+    });
+    const merged = Array.from(map.values());
+    saveCinematicDB(merged);
+    return merged;
+  } catch {
+    return getCinematicDB();
   }
 }

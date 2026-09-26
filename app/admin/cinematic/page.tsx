@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getCinematicDB, saveCinematicDB } from '@/lib/poses-db-helpers';
+import { 
+  getCinematicDB, 
+  saveCinematicDB, 
+  addCinematicDB, 
+  updateCinematicDB, 
+  deleteCinematicDB, 
+  fetchCinematicCloud 
+} from '@/lib/poses-db-helpers';
 import { CinematicShot } from '@/lib/types';
 import { EVENTS } from '@/lib/constants';
 
@@ -55,6 +62,11 @@ export default function AdminCinematic() {
 
   useEffect(() => {
     setShots(getCinematicDB());
+    fetchCinematicCloud().then(cloudShots => {
+      if (cloudShots && cloudShots.length > 0) {
+        setShots(cloudShots);
+      }
+    }).catch(() => {});
   }, []);
 
   const resetForm = () => {
@@ -89,9 +101,8 @@ export default function AdminCinematic() {
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this cinematic shot?')) {
-      const updated = shots.filter(s => s.id !== id);
+      const updated = deleteCinematicDB(id);
       setShots(updated);
-      saveCinematicDB(updated);
     }
   };
 
@@ -104,8 +115,7 @@ export default function AdminCinematic() {
     let updated: CinematicShot[];
 
     if (editingId) {
-      updated = shots.map(s => s.id === editingId ? {
-        ...s,
+      updated = updateCinematicDB(editingId, {
         title: title.trim(),
         description: description.trim(),
         camera_movement: cameraMovement.trim() || undefined,
@@ -114,7 +124,7 @@ export default function AdminCinematic() {
         orientation,
         tags: tagsArray,
         media_url: mediaUrl.trim() || undefined
-      } : s);
+      });
     } else {
       const newShot: CinematicShot = {
         id: `cs_${Date.now()}`,
@@ -128,11 +138,10 @@ export default function AdminCinematic() {
         media_url: mediaUrl.trim() || 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800',
         created_at: new Date().toISOString()
       };
-      updated = [newShot, ...shots];
+      updated = addCinematicDB(newShot);
     }
 
     setShots(updated);
-    saveCinematicDB(updated);
     setShowForm(false);
     resetForm();
   };

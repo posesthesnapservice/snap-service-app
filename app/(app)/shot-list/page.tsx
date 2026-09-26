@@ -3,10 +3,12 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, canAccessPhotography } from "@/lib/auth-helpers";
-import { mockShotList } from "@/lib/mock-data";
+import { getShotListDB, fetchShotListCloud } from "@/lib/poses-db-helpers";
+import { ShotListItem } from "@/lib/types";
 
 export default function ShotListPage() {
   const router = useRouter();
+  const [shots, setShots] = useState<ShotListItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeEvent, setActiveEvent] = useState("All");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -15,13 +17,20 @@ export default function ShotListPage() {
     const u = getUser();
     if (u && !canAccessPhotography(u.role)) {
       router.replace('/home');
+      return;
     }
+    setShots(getShotListDB());
+    fetchShotListCloud().then(cloudShots => {
+      if (cloudShots && cloudShots.length > 0) {
+        setShots(cloudShots);
+      }
+    }).catch(() => {});
   }, []);
 
-  // Derive unique events from mockShotList
-  const events = ["All", ...Array.from(new Set(mockShotList.map(shot => shot.event || "Other")))];
+  // Derive unique events from shots
+  const events = ["All", ...Array.from(new Set(shots.map(shot => shot.event || "Other")))];
 
-  const filteredShots = mockShotList.filter(shot => {
+  const filteredShots = shots.filter(shot => {
     const matchesSearch = shot.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           shot.description?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesEvent = activeEvent === "All" || shot.event === activeEvent;
