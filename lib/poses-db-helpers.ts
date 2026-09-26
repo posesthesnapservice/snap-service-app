@@ -178,6 +178,10 @@ export function addTrendingReelDB(newItem: TrendingReel): TrendingReel[] {
   const updated = [newItem, ...current];
   saveTrendingReelsDB(updated);
 
+  const eventsStr = Array.isArray(newItem.events) && newItem.events.length > 0 
+    ? newItem.events.join(', ') 
+    : (newItem.event || 'General');
+
   // Async sync to Supabase Database table
   supabase.from('snap_trending_reels').insert([{
     id: newItem.id,
@@ -186,7 +190,7 @@ export function addTrendingReelDB(newItem: TrendingReel): TrendingReel[] {
     cover_url: newItem.cover_image || '',
     description: newItem.description || '',
     orientation: newItem.orientation || 'portrait',
-    event: newItem.event || 'General'
+    event: eventsStr
   }]).then((res) => {
     if (res && res.error) console.warn('Supabase DB Sync (Reels insert) notice:', res.error.message);
   });
@@ -199,7 +203,12 @@ export function updateTrendingReelDB(id: string, partial: Partial<TrendingReel>)
   const updated = current.map(item => item.id === id ? { ...item, ...partial } : item);
   saveTrendingReelsDB(updated);
 
-  supabase.from('snap_trending_reels').update(partial).eq('id', id).then((res) => {
+  const updatePayload: any = { ...partial };
+  if (partial.events && Array.isArray(partial.events)) {
+    updatePayload.event = partial.events.join(', ');
+  }
+
+  supabase.from('snap_trending_reels').update(updatePayload).eq('id', id).then((res) => {
     if (res && res.error) console.warn('Supabase DB Sync (Reels update) notice:', res.error.message);
   });
 
@@ -225,18 +234,25 @@ export async function fetchTrendingReelsCloud(): Promise<TrendingReel[]> {
     if (error || !data || data.length === 0) {
       return getTrendingReelsDB();
     }
-    const mapped: TrendingReel[] = data.map((d: any) => ({
-      id: d.id,
-      title: d.title,
-      description: d.description || '',
-      video_url: d.video_url,
-      cover_image: d.cover_url || d.cover_image,
-      event: d.event || 'General',
-      orientation: d.orientation || 'portrait',
-      status: 'published',
-      tags: d.tags || [],
-      created_at: d.created_at || new Date().toISOString()
-    }));
+    const mapped: TrendingReel[] = data.map((d: any) => {
+      const rawEvent = d.event || 'General';
+      const eventsList = rawEvent.includes(',') 
+        ? rawEvent.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : [rawEvent.trim()];
+      return {
+        id: d.id,
+        title: d.title,
+        description: d.description || '',
+        video_url: d.video_url,
+        cover_image: d.cover_url || d.cover_image,
+        event: eventsList[0] || 'General',
+        events: eventsList,
+        orientation: d.orientation || 'portrait',
+        status: 'published',
+        tags: d.tags || [],
+        created_at: d.created_at || new Date().toISOString()
+      };
+    });
     saveTrendingReelsDB(mapped);
     return mapped;
   } catch {

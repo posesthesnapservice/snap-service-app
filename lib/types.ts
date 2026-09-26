@@ -78,6 +78,7 @@ export interface TrendingReel {
   video_url?: string;
   cover_image?: string;
   event: string; // 'Mehndi' | 'Barat' | 'Walima' | 'Nikah' | 'Mayun' | 'Dholki' | 'Pre-Wedding' | 'Engagement' | 'General'
+  events?: string[]; // Multiple event categories support
   orientation: 'portrait' | 'landscape'; // portrait (9:16) vs landscape (16:9)
   status: PoseStatus;
   tags?: string[];

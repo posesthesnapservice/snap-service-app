@@ -50,7 +50,10 @@ export default function TrendingReelsPage() {
 
   const filtered = reels.filter(r => {
     if (search && !r.title.toLowerCase().includes(search.toLowerCase()) && !r.description?.toLowerCase().includes(search.toLowerCase())) return false;
-    if (selectedEvent !== 'All' && r.event !== selectedEvent) return false;
+    if (selectedEvent !== 'All') {
+      const reelEvents = (r as any).events || (r.event ? r.event.split(',').map((s: string) => s.trim()) : []);
+      if (!reelEvents.includes(selectedEvent) && r.event !== selectedEvent) return false;
+    }
     return true;
   });
 
@@ -107,6 +110,7 @@ export default function TrendingReelsPage() {
           const isPortrait = (reel.orientation || 'portrait') === 'portrait';
           const isFav = favorites.includes(reel.id);
           const isToday = todayIds.includes(reel.id);
+          const reelEventList = (reel as any).events || (reel.event ? reel.event.split(',').map((s: string) => s.trim()) : ['General']);
 
           return (
             <div 
@@ -159,12 +163,14 @@ export default function TrendingReelsPage() {
                 </div>
 
                 {/* Event & Aspect Tags */}
-                <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: '6px' }}>
-                  <span style={{ background: '#D4AF37', color: '#000', padding: '3px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
-                    {reel.event}
-                  </span>
-                  <span style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '3px 8px', borderRadius: '4px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.2)' }}>
-                    {isPortrait ? '📱 9:16 Reel' : '🖥️ 16:9 Film'}
+                <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '75%' }}>
+                  {reelEventList.map((ev: string) => (
+                    <span key={ev} style={{ background: '#D4AF37', color: '#000', padding: '2px 7px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+                      {ev}
+                    </span>
+                  ))}
+                  <span style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '2px 7px', borderRadius: '4px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.2)' }}>
+                    {isPortrait ? '📱 9:16' : '🖥️ 16:9'}
                   </span>
                 </div>
 
