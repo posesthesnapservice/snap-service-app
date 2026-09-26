@@ -1,7 +1,7 @@
 import { mockPoses, mockShotList, mockCinematicShots, mockTrendingReels } from './mock-data';
 import { Pose, ShotListItem, CinematicShot, TrendingReel } from './types';
 import { supabase } from './supabase';
-import { uploadMediaToCloudinary } from './cloudinary';
+import { uploadMediaToCloudinary, deleteMediaFromCloudinary } from './cloudinary';
 
 const POSES_KEY = 'snap_poses_db';
 const SHOTLIST_KEY = 'snap_shotlist_db';
@@ -91,12 +91,17 @@ export function updatePoseDB(id: string, partial: Partial<Pose>): Pose[] {
 
 export function deletePoseDB(id: string): Pose[] {
   const current = getPosesDB();
+  const toDelete = current.find(p => p.id === id);
   const updated = current.filter(p => p.id !== id);
   savePosesDB(updated);
 
   supabase.from('snap_poses').delete().eq('id', id).then((res) => {
     if (res && res.error) console.warn('Supabase DB Sync (Poses delete) notice:', res.error.message);
   });
+
+  if (toDelete?.image_url) {
+    deleteMediaFromCloudinary(toDelete.image_url);
+  }
 
   return updated;
 }
@@ -217,12 +222,20 @@ export function updateTrendingReelDB(id: string, partial: Partial<TrendingReel>)
 
 export function deleteTrendingReelDB(id: string): TrendingReel[] {
   const current = getTrendingReelsDB();
+  const toDelete = current.find(item => item.id === id);
   const updated = current.filter(item => item.id !== id);
   saveTrendingReelsDB(updated);
 
   supabase.from('snap_trending_reels').delete().eq('id', id).then((res) => {
     if (res && res.error) console.warn('Supabase DB Sync (Reels delete) notice:', res.error.message);
   });
+
+  if (toDelete?.video_url) {
+    deleteMediaFromCloudinary(toDelete.video_url);
+  }
+  if (toDelete?.cover_image) {
+    deleteMediaFromCloudinary(toDelete.cover_image);
+  }
 
   return updated;
 }

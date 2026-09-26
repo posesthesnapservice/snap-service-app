@@ -40,3 +40,23 @@ export async function uploadMediaToCloudinary(file: File): Promise<string | null
 
   return null;
 }
+
+/**
+ * Permanently delete media from Cloudinary (both video and image)
+ * via server-side API route.
+ */
+export async function deleteMediaFromCloudinary(urlOrPublicId?: string | null): Promise<boolean> {
+  if (!urlOrPublicId) return false;
+  try {
+    const res = await fetch('/api/cloudinary/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: urlOrPublicId }),
+    });
+    const data = await res.json();
+    return !!data.success;
+  } catch (err) {
+    console.warn('Cloudinary delete exception:', err);
+    return false;
+  }
+}
