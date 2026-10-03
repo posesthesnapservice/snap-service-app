@@ -256,6 +256,8 @@ export function deleteCinematicDB(id: string): CinematicShot[] {
 }
 
 // --- TRENDING REELS DB ---
+const DELETED_REEL_IDS = new Set(['tr2', 'tr3', 'tr4', 'tr5', 'tr6']);
+
 export function getTrendingReelsDB(): TrendingReel[] {
   if (typeof window === 'undefined') return mockTrendingReels;
   try {
@@ -264,7 +266,12 @@ export function getTrendingReelsDB(): TrendingReel[] {
       localStorage.setItem(REELS_KEY, JSON.stringify(mockTrendingReels));
       return mockTrendingReels;
     }
-    return JSON.parse(stored);
+    const parsed: TrendingReel[] = JSON.parse(stored);
+    const cleaned = parsed.filter(item => !DELETED_REEL_IDS.has(item.id));
+    if (cleaned.length !== parsed.length) {
+      localStorage.setItem(REELS_KEY, JSON.stringify(cleaned));
+    }
+    return cleaned;
   } catch {
     return mockTrendingReels;
   }
@@ -345,10 +352,16 @@ export function deleteTrendingReelDB(id: string): TrendingReel[] {
 export async function fetchTrendingReelsCloud(): Promise<TrendingReel[]> {
   try {
     const { data, error } = await supabase.from('snap_trending_reels').select('*').order('created_at', { ascending: false });
+    // Delete removed mock reels from Supabase if present
+    supabase.from('snap_trending_reels').delete().in('id', Array.from(DELETED_REEL_IDS)).then(() => {});
+
     if (error || !data || data.length === 0) {
       return getTrendingReelsDB();
     }
-    const mapped: TrendingReel[] = data.map((d: any) => {
+
+    const mapped: TrendingReel[] = data
+      .filter((d: any) => !DELETED_REEL_IDS.has(d.id))
+      .map((d: any) => {
       const rawEvent = d.event || 'General';
       const eventsList = rawEvent.includes(',') 
         ? rawEvent.split(',').map((s: string) => s.trim()).filter(Boolean)
