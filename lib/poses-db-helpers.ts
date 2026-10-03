@@ -529,7 +529,27 @@ export function getDirectionalShootsDB(): DirectionalShoot[] {
       localStorage.setItem(DIRECTIONAL_KEY, JSON.stringify(mockDirectionalShoots));
       return mockDirectionalShoots;
     }
-    return JSON.parse(stored);
+    const parsed: DirectionalShoot[] = JSON.parse(stored);
+    // Auto-migrate if local copy lacks reference_images or new Scene 01
+    const hasRefImages = parsed.some(p => p.reference_images && p.reference_images.length > 0);
+    const hasDs0 = parsed.some(p => p.id === 'ds0');
+    if (!hasRefImages || !hasDs0) {
+      // Merge mock data into local storage
+      const map = new Map<string, DirectionalShoot>();
+      mockDirectionalShoots.forEach(m => map.set(m.id, m));
+      parsed.forEach(p => {
+        if (!map.has(p.id)) {
+          map.set(p.id, {
+            ...p,
+            reference_images: p.reference_images || (p.cover_image ? [p.cover_image] : [])
+          });
+        }
+      });
+      const migrated = Array.from(map.values());
+      localStorage.setItem(DIRECTIONAL_KEY, JSON.stringify(migrated));
+      return migrated;
+    }
+    return parsed;
   } catch {
     return mockDirectionalShoots;
   }
@@ -552,6 +572,8 @@ export function addDirectionalShootDB(newItem: DirectionalShoot): DirectionalSho
   supabase.from('snap_directional_shoots').upsert([{
     id: newItem.id,
     title: newItem.title,
+    scene_number: newItem.scene_number || '',
+    folder_name: newItem.folder_name || '',
     description: newItem.description || '',
     media_url: newItem.media_url || '',
     cover_image: newItem.cover_image || '',
@@ -561,7 +583,8 @@ export function addDirectionalShootDB(newItem: DirectionalShoot): DirectionalSho
     event: newItem.event || 'General',
     orientation: newItem.orientation || 'portrait',
     status: newItem.status || 'published',
-    tags: newItem.tags || []
+    tags: newItem.tags || [],
+    reference_images: newItem.reference_images || []
   }], { onConflict: 'id' }).then((res) => {
     if (res?.error) console.warn('Supabase DB Sync (Directional upsert) notice:', res.error.message);
   });
@@ -625,6 +648,8 @@ export async function fetchDirectionalShootsCloud(): Promise<DirectionalShoot[]>
     const mapped: DirectionalShoot[] = data.map((d: any) => ({
       id: d.id,
       title: d.title,
+      scene_number: d.scene_number || undefined,
+      folder_name: d.folder_name || undefined,
       description: d.description || '',
       media_url: d.media_url || undefined,
       cover_image: d.cover_image || undefined,
@@ -636,6 +661,7 @@ export async function fetchDirectionalShootsCloud(): Promise<DirectionalShoot[]>
       orientation: d.orientation || 'portrait',
       status: d.status || 'published',
       tags: d.tags || [],
+      reference_images: d.reference_images || (d.cover_image ? [d.cover_image] : []),
       created_at: d.created_at || new Date().toISOString()
     }));
 

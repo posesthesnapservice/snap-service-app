@@ -101,6 +101,8 @@ export interface TrendingReel {
 export interface DirectionalShoot {
   id: string;
   title: string;
+  scene_number?: string; // e.g. 'Scene 01'
+  folder_name?: string; // e.g. 'Couple Shoot Layout'
   description?: string;
   media_url?: string;
   cover_image?: string;
@@ -112,6 +114,7 @@ export interface DirectionalShoot {
   orientation?: 'portrait' | 'landscape';
   status: PoseStatus;
   tags?: string[];
+  reference_images?: string[]; // Array of reference image URLs inside this scene folder!
   created_at: string;
 }
 

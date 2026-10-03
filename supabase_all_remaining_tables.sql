@@ -141,6 +141,8 @@ CREATE POLICY "Public access to snap_favorites" ON public.snap_favorites FOR ALL
 CREATE TABLE IF NOT EXISTS public.snap_directional_shoots (
   id text PRIMARY KEY,
   title text NOT NULL,
+  scene_number text,
+  folder_name text,
   description text,
   media_url text,
   cover_image text,
@@ -151,6 +153,7 @@ CREATE TABLE IF NOT EXISTS public.snap_directional_shoots (
   orientation text DEFAULT 'portrait',
   status text DEFAULT 'published',
   tags text[] DEFAULT '{}'::text[],
+  reference_images jsonb DEFAULT '[]'::jsonb,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now())
 );
 
