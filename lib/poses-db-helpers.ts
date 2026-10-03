@@ -361,6 +361,25 @@ export function deleteTrendingReelDB(id: string): TrendingReel[] {
   return updated;
 }
 
+export function deleteTrendingReelsBulkDB(ids: string[]): TrendingReel[] {
+  if (!ids || ids.length === 0) return getTrendingReelsDB();
+  const current = getTrendingReelsDB();
+  const toDelete = current.filter(item => ids.includes(item.id));
+  const updated = current.filter(item => !ids.includes(item.id));
+  saveTrendingReelsDB(updated);
+
+  supabase.from('snap_trending_reels').delete().in('id', ids).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Bulk Reels delete) notice:', res.error.message);
+  });
+
+  toDelete.forEach(item => {
+    if (item.video_url) deleteMediaFromCloudinary(item.video_url);
+    if (item.cover_image) deleteMediaFromCloudinary(item.cover_image);
+  });
+
+  return updated;
+}
+
 // --- CLOUD SYNC FETCHERS ---
 export async function fetchTrendingReelsCloud(): Promise<TrendingReel[]> {
   try {

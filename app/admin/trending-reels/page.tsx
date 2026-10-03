@@ -7,6 +7,7 @@ import {
   addTrendingReelDB, 
   updateTrendingReelDB, 
   deleteTrendingReelDB, 
+  deleteTrendingReelsBulkDB, 
   uploadMediaToSupabase, 
   fetchTrendingReelsCloud 
 } from '@/lib/poses-db-helpers';
@@ -95,6 +96,7 @@ export default function AdminTrendingReels() {
   const [filterEvent, setFilterEvent] = useState('All');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Form State for Single Add / Edit
   const [form, setForm] = useState<ReelFormState>({
@@ -439,6 +441,31 @@ export default function AdminTrendingReels() {
     if (confirm('Are you sure you want to delete this trending reel?')) {
       const updated = deleteTrendingReelDB(id);
       setReels(updated);
+      setSelectedIds(prev => prev.filter(i => i !== id));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (filteredReels.length === 0) return;
+    if (selectedIds.length === filteredReels.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredReels.map(r => r.id));
+    }
+  };
+
+  const deleteSelected = () => {
+    if (selectedIds.length === 0) return;
+    if (confirm(`Are you sure you want to delete ${selectedIds.length} selected trending reel(s)?`)) {
+      const updated = deleteTrendingReelsBulkDB(selectedIds);
+      setReels(updated);
+      setSelectedIds([]);
     }
   };
 
@@ -528,14 +555,105 @@ export default function AdminTrendingReels() {
         ))}
       </div>
 
+      {/* Multi-Selection Action Bar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '12px',
+        padding: '12px 18px',
+        backgroundColor: selectedIds.length > 0 ? 'rgba(212,175,55,0.08)' : 'rgba(255,255,255,0.02)',
+        border: selectedIds.length > 0 ? '1px solid rgba(212,175,55,0.3)' : '1px solid rgba(255,255,255,0.06)',
+        borderRadius: '10px',
+        marginBottom: '20px',
+        transition: 'all 0.2s ease'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#fff' }}>
+            <input 
+              type="checkbox" 
+              checked={filteredReels.length > 0 && selectedIds.length === filteredReels.length}
+              onChange={toggleSelectAll}
+              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#D4AF37' }}
+            />
+            <span>Select All ({filteredReels.length})</span>
+          </label>
+          {selectedIds.length > 0 && (
+            <span style={{ 
+              backgroundColor: '#D4AF37', 
+              color: '#000', 
+              padding: '3px 10px', 
+              borderRadius: '12px', 
+              fontSize: '11px', 
+              fontWeight: '700' 
+            }}>
+              {selectedIds.length} Selected
+            </span>
+          )}
+        </div>
+
+        {selectedIds.length > 0 && (
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              onClick={() => setSelectedIds([])}
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#aaa',
+                padding: '7px 14px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: '500'
+              }}
+            >
+              Clear Selection
+            </button>
+            <button
+              onClick={deleteSelected}
+              style={{
+                backgroundColor: '#ef4444',
+                color: '#fff',
+                border: 'none',
+                padding: '8px 18px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '700',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 12px rgba(239,68,68,0.35)'
+              }}
+            >
+              <TrashIcon /> Delete Selected ({selectedIds.length})
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Reels Grid Display */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: '20px' }}>
         {filteredReels.map((reel) => {
           const isPortrait = (reel.orientation || 'portrait') === 'portrait';
           const reelEventBadges = (reel as any).events || (reel.event ? reel.event.split(',').map((s: string) => s.trim()) : ['General']);
+          const isSelected = selectedIds.includes(reel.id);
 
           return (
-            <div key={reel.id} style={{ backgroundColor: '#111118', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div 
+              key={reel.id} 
+              style={{ 
+                backgroundColor: '#111118', 
+                border: isSelected ? '2px solid #D4AF37' : '1px solid rgba(255,255,255,0.06)', 
+                boxShadow: isSelected ? '0 0 16px rgba(212,175,55,0.25)' : 'none',
+                borderRadius: '12px', 
+                overflow: 'hidden', 
+                display: 'flex', 
+                flexDirection: 'column',
+                transition: 'border 0.15s, box-shadow 0.15s'
+              }}
+            >
               {/* Media Container with Aspect Ratio positioning */}
               <div style={{ 
                 position: 'relative', 
@@ -544,6 +662,39 @@ export default function AdminTrendingReels() {
                 backgroundColor: '#0a0a0f',
                 overflow: 'hidden'
               }}>
+                {/* Multi-Select Checkbox Overlay */}
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSelect(reel.id);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: 10,
+                    right: 10,
+                    zIndex: 15,
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '7px',
+                    backgroundColor: isSelected ? '#D4AF37' : 'rgba(0,0,0,0.65)',
+                    border: isSelected ? '2px solid #D4AF37' : '2px solid rgba(255,255,255,0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(4px)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                    transition: 'all 0.15s ease'
+                  }}
+                  title={isSelected ? "Deselect this reel" : "Select this reel for bulk delete"}
+                >
+                  {isSelected && (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                  )}
+                </div>
+
                 {reel.video_url ? (
                   <video 
                     src={reel.video_url} 
@@ -563,7 +714,7 @@ export default function AdminTrendingReels() {
                 )}
                 
                 {/* Event badges overlay */}
-                <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '75%' }}>
+                <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '70%' }}>
                   {reelEventBadges.map((ev: string) => (
                     <span key={ev} style={{ background: '#D4AF37', color: '#000', padding: '2px 7px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
                       {ev}
