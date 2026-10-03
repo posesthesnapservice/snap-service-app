@@ -179,8 +179,66 @@ export default function TrendingReelsPage() {
         ))}
       </div>
 
+      {/* Responsive 2-Column Mobile Grid Styles */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .trending-reels-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+          gap: 16px;
+        }
+        @media (max-width: 640px) {
+          .trending-reels-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 10px !important;
+          }
+          .reel-card-info {
+            padding: 8px 10px !important;
+          }
+          .reel-card-title {
+            font-size: 12px !important;
+            line-height: 1.3 !important;
+            margin-bottom: 2px !important;
+            display: -webkit-box !important;
+            -webkit-line-clamp: 2 !important;
+            -webkit-box-orient: vertical !important;
+            overflow: hidden !important;
+          }
+          .reel-card-desc {
+            font-size: 10px !important;
+            line-height: 1.25 !important;
+            display: -webkit-box !important;
+            -webkit-line-clamp: 1 !important;
+            -webkit-box-orient: vertical !important;
+            overflow: hidden !important;
+          }
+          .reel-play-btn {
+            width: 34px !important;
+            height: 34px !important;
+          }
+          .reel-play-btn svg {
+            width: 16px !important;
+            height: 16px !important;
+          }
+          .reel-action-btn {
+            width: 26px !important;
+            height: 26px !important;
+            font-size: 11px !important;
+          }
+          .reel-badge-tag {
+            font-size: 9px !important;
+            padding: 1px 5px !important;
+          }
+          .reel-gif-badge {
+            font-size: 8px !important;
+            padding: 2px 5px !important;
+            bottom: 6px !important;
+            left: 6px !important;
+          }
+        }
+      ` }} />
+
       {/* Reels Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+      <div className="trending-reels-grid">
         {filtered.map(reel => {
           const isPortrait = (reel.orientation || 'portrait') === 'portrait';
           const isFav = favorites.includes(reel.id);
@@ -230,7 +288,7 @@ export default function TrendingReelsPage() {
 
                 {/* Dark Gradient Overlay & Tap to Listen Icon */}
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.85 }}>
-                  <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: 'rgba(212,175,55,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(0,0,0,0.6)' }}>
+                  <div className="reel-play-btn" style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'rgba(212,175,55,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(0,0,0,0.6)' }}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="#000">
                       <polygon points="5 3 19 12 5 21 5 3"></polygon>
                     </svg>
@@ -238,25 +296,26 @@ export default function TrendingReelsPage() {
                 </div>
 
                 {/* Event & Aspect Tags */}
-                <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '75%' }}>
-                  {reelEventList.map((ev: string) => (
-                    <span key={ev} style={{ background: '#D4AF37', color: '#000', padding: '2px 7px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+                <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '70%', zIndex: 10 }}>
+                  {reelEventList.slice(0, 2).map((ev: string) => (
+                    <span key={ev} className="reel-badge-tag" style={{ background: '#D4AF37', color: '#000', padding: '2px 7px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
                       {ev}
                     </span>
                   ))}
-                  <span style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '2px 7px', borderRadius: '4px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.2)' }}>
+                  <span className="reel-badge-tag" style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '2px 7px', borderRadius: '4px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.2)' }}>
                     {isPortrait ? '📱 9:16' : '🖥️ 16:9'}
                   </span>
                 </div>
 
                 {/* Muted GIF Indicator Badge */}
-                <div style={{ position: 'absolute', bottom: 10, left: 10, background: 'rgba(0,0,0,0.7)', color: '#D4AF37', fontSize: '10px', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span>🔇 GIF Loop (Tap for Audio)</span>
+                <div className="reel-gif-badge" style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,0.7)', color: '#D4AF37', fontSize: '10px', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span>🔇 Loop</span>
                 </div>
 
                 {/* Quick Action Overlay Buttons */}
-                <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: '6px', zIndex: 40 }}>
+                <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: '5px', zIndex: 40 }}>
                   <button 
+                    className="reel-action-btn"
                     onClick={e => toggleToday(e, reel.id)} 
                     style={{ 
                       background: isToday ? '#10b981' : 'rgba(0,0,0,0.6)', 
@@ -269,13 +328,15 @@ export default function TrendingReelsPage() {
                       fontSize: '12px',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                      justifyContent: 'center',
+                      padding: 0
                     }}
                     title="Add to Today Shoot"
                   >
                     {isToday ? '✓' : '+'}
                   </button>
                   <button 
+                    className="reel-action-btn"
                     onClick={e => toggleFav(e, reel.id)} 
                     style={{ 
                       background: isFav ? 'rgba(239,68,68,0.9)' : 'rgba(0,0,0,0.6)', 
@@ -285,10 +346,11 @@ export default function TrendingReelsPage() {
                       width: '32px', 
                       height: '32px', 
                       cursor: 'pointer',
-                      fontSize: '14px',
+                      fontSize: '13px',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                      justifyContent: 'center',
+                      padding: 0
                     }}
                     title={isFav ? "Remove from favorites" : "Add to favorites"}
                   >
@@ -298,9 +360,11 @@ export default function TrendingReelsPage() {
               </div>
 
               {/* Title & Info */}
-              <div style={{ padding: '14px' }}>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: 'bold', color: '#fff' }}>{reel.title}</h3>
-                <p style={{ margin: 0, fontSize: '12px', color: '#aaa', lineHeight: '1.4' }}>{reel.description}</p>
+              <div className="reel-card-info" style={{ padding: '12px' }}>
+                <h3 className="reel-card-title" style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 'bold', color: '#fff' }}>{reel.title}</h3>
+                {reel.description && (
+                  <p className="reel-card-desc" style={{ margin: 0, fontSize: '11px', color: '#aaa', lineHeight: '1.4' }}>{reel.description}</p>
+                )}
               </div>
             </div>
           );
