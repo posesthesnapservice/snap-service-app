@@ -563,18 +563,6 @@ export default function FavoritesPage() {
               background: 'rgba(255,255,255,0.5)', 
               boxShadow: '0 1px 4px rgba(0,0,0,0.6)' 
             }} />
-            <span style={{ 
-              fontSize: '11px', 
-              color: 'rgba(255,255,255,0.5)', 
-              marginTop: '5px', 
-              fontWeight: '500', 
-              letterSpacing: '0.2px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}>
-              <span>↓</span> Pull down to close
-            </span>
           </div>
 
           {/* Video Modal Card */}

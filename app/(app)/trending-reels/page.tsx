@@ -329,12 +329,6 @@ export default function TrendingReelsPage() {
             font-size: 9px !important;
             padding: 1px 5px !important;
           }
-          .reel-gif-badge {
-            font-size: 8px !important;
-            padding: 2px 5px !important;
-            bottom: 6px !important;
-            left: 6px !important;
-          }
         }
       ` }} />
 
@@ -406,11 +400,6 @@ export default function TrendingReelsPage() {
                   <span className="reel-badge-tag" style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '2px 7px', borderRadius: '4px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.2)' }}>
                     {isPortrait ? '📱 9:16' : '🖥️ 16:9'}
                   </span>
-                </div>
-
-                {/* Muted GIF Indicator Badge */}
-                <div className="reel-gif-badge" style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,0.7)', color: '#D4AF37', fontSize: '10px', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span>🔇 Loop</span>
                 </div>
 
                 {/* Quick Action Overlay Buttons */}
@@ -525,18 +514,6 @@ export default function TrendingReelsPage() {
               background: 'rgba(255,255,255,0.5)', 
               boxShadow: '0 1px 4px rgba(0,0,0,0.6)' 
             }} />
-            <span style={{ 
-              fontSize: '11px', 
-              color: 'rgba(255,255,255,0.5)', 
-              marginTop: '5px', 
-              fontWeight: '500', 
-              letterSpacing: '0.2px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}>
-              <span>↓</span> Pull down to close
-            </span>
           </div>
 
           {/* Main Video Modal Card */}
