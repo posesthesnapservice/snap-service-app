@@ -6,9 +6,11 @@ import {
   getPosesDB, 
   getTrendingReelsDB, 
   getCinematicDB, 
+  getDirectionalShootsDB,
   fetchPosesCloud, 
   fetchTrendingReelsCloud, 
-  fetchCinematicCloud 
+  fetchCinematicCloud,
+  fetchDirectionalShootsCloud 
 } from '@/lib/poses-db-helpers';
 import { getUser } from '@/lib/auth-helpers';
 import { 
@@ -30,7 +32,7 @@ import Link from 'next/link';
 export interface UnifiedTodayItem {
   id: string;
   title: string;
-  type: 'pose' | 'reel' | 'cinematic';
+  type: 'pose' | 'reel' | 'cinematic' | 'directional';
   image_url: string;
   video_url?: string;
   event?: string;
@@ -38,6 +40,8 @@ export interface UnifiedTodayItem {
   notes?: string;
   camera_lens?: string;
   camera_movement?: string;
+  camera_angle?: string;
+  director_notes?: string;
   orientation?: 'portrait' | 'landscape';
 }
 
@@ -52,6 +56,7 @@ export default function TodayShootPage() {
   const [allPoses, setAllPoses] = useState<any[]>([]);
   const [allReels, setAllReels] = useState<any[]>([]);
   const [allCinematic, setAllCinematic] = useState<any[]>([]);
+  const [allDirectional, setAllDirectional] = useState<any[]>([]);
 
   // Pending Shoot Assignment Modal States
   const [pendingAssignments, setPendingAssignments] = useState<ShootAssignment[]>([]);
@@ -72,11 +77,13 @@ export default function TodayShootPage() {
     setAllPoses(getPosesDB());
     setAllReels(getTrendingReelsDB());
     setAllCinematic(getCinematicDB());
+    setAllDirectional(getDirectionalShootsDB());
 
     // Background fetch fresh items from Supabase cloud
     fetchPosesCloud().then(p => { if (p && p.length > 0) setAllPoses(p); }).catch(() => {});
     fetchTrendingReelsCloud().then(r => { if (r && r.length > 0) setAllReels(r); }).catch(() => {});
     fetchCinematicCloud().then(c => { if (c && c.length > 0) setAllCinematic(c); }).catch(() => {});
+    fetchDirectionalShootsCloud().then(d => { if (d && d.length > 0) setAllDirectional(d); }).catch(() => {});
 
     const u = getUser();
     if (u) {
@@ -210,6 +217,24 @@ export default function TodayShootPage() {
         instructions: cine.description,
         camera_movement: cine.camera_movement,
         orientation: cine.orientation || 'portrait'
+      });
+      return;
+    }
+    // 4. Directional Shoots
+    const dir = allDirectional.find((d: any) => d.id === id);
+    if (dir) {
+      todayItems.push({
+        id: dir.id,
+        title: dir.title,
+        type: 'directional',
+        image_url: dir.cover_image || dir.media_url || 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?w=800',
+        video_url: dir.media_url?.endsWith('.mp4') ? dir.media_url : undefined,
+        event: dir.event || dir.events?.[0] || 'Directional',
+        instructions: dir.director_notes ? `Director: "${dir.director_notes}"` : dir.description,
+        director_notes: dir.director_notes,
+        camera_angle: dir.camera_angle,
+        camera_movement: dir.movement,
+        orientation: dir.orientation || 'portrait'
       });
       return;
     }
@@ -551,6 +576,22 @@ export default function TodayShootPage() {
             >
               Browse Reels →
             </Link>
+            <Link 
+              href="/directional-shoots"
+              style={{
+                display: 'inline-block',
+                padding: '10px 18px',
+                borderRadius: '10px',
+                background: 'rgba(16, 185, 129, 0.15)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                color: '#10b981',
+                fontWeight: 'bold',
+                fontSize: '0.85rem',
+                textDecoration: 'none'
+              }}
+            >
+              Directional Shoots 🧭
+            </Link>
           </div>
         </div>
       ) : (
@@ -584,6 +625,11 @@ export default function TodayShootPage() {
                 {item.type === 'cinematic' && (
                   <div style={{ position: 'absolute', top: '6px', left: '36px', background: 'rgba(124, 58, 237, 0.9)', color: '#fff', fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px', zIndex: 2 }}>
                     🎬 CINE
+                  </div>
+                )}
+                {item.type === 'directional' && (
+                  <div style={{ position: 'absolute', top: '6px', left: '36px', background: 'rgba(16, 185, 129, 0.9)', color: '#000', fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px', zIndex: 2 }}>
+                    🧭 DIR
                   </div>
                 )}
 
@@ -781,14 +827,14 @@ export default function TodayShootPage() {
             <div style={{ padding: '12px', background: 'linear-gradient(to top, #0a0a0f 80%, rgba(10,10,15,0))', position: 'relative' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                 <span style={{ 
-                  background: todayItems[activeIndex].type === 'reel' ? '#ef4444' : todayItems[activeIndex].type === 'cinematic' ? '#7c3aed' : '#D4AF37', 
-                  color: todayItems[activeIndex].type === 'pose' ? '#000' : '#fff',
+                  background: todayItems[activeIndex].type === 'reel' ? '#ef4444' : todayItems[activeIndex].type === 'cinematic' ? '#7c3aed' : todayItems[activeIndex].type === 'directional' ? '#10b981' : '#D4AF37', 
+                  color: (todayItems[activeIndex].type === 'pose' || todayItems[activeIndex].type === 'directional') ? '#000' : '#fff',
                   fontSize: '9px', 
                   fontWeight: 'bold', 
                   padding: '1px 6px', 
                   borderRadius: '4px' 
                 }}>
-                  {todayItems[activeIndex].type.toUpperCase()}
+                  {todayItems[activeIndex].type === 'directional' ? '🧭 DIR' : todayItems[activeIndex].type.toUpperCase()}
                 </span>
                 <span style={{ fontSize: '11px', color: '#888' }}>{todayItems[activeIndex].event}</span>
               </div>
@@ -835,7 +881,13 @@ export default function TodayShootPage() {
                   </Link>
                 ) : (
                   <Link 
-                    href={todayItems[activeIndex].type === 'reel' ? '/trending-reels' : '/cinematic'}
+                    href={
+                      todayItems[activeIndex].type === 'reel' 
+                        ? '/trending-reels' 
+                        : todayItems[activeIndex].type === 'directional' 
+                          ? '/directional-shoots' 
+                          : '/cinematic'
+                    }
                     style={{
                       flex: 1,
                       textAlign: 'center',

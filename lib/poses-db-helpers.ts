@@ -1,5 +1,5 @@
-import { mockPoses, mockShotList, mockCinematicShots, mockTrendingReels } from './mock-data';
-import { Pose, ShotListItem, CinematicShot, TrendingReel } from './types';
+import { mockPoses, mockShotList, mockCinematicShots, mockTrendingReels, mockDirectionalShoots } from './mock-data';
+import { Pose, ShotListItem, CinematicShot, TrendingReel, DirectionalShoot } from './types';
 import { supabase } from './supabase';
 import { uploadMediaToCloudinary, deleteMediaFromCloudinary } from './cloudinary';
 
@@ -7,6 +7,7 @@ const POSES_KEY = 'snap_poses_db';
 const SHOTLIST_KEY = 'snap_shotlist_db';
 const CINEMATIC_KEY = 'snap_cinematic_db';
 const REELS_KEY = 'snap_trending_reels_db';
+const DIRECTIONAL_KEY = 'snap_directional_db';
 
 // --- MEDIA UPLOADER (Cloudinary 25GB -> Supabase Fallback) ---
 export async function uploadMediaToSupabase(file: File, folder = 'reels'): Promise<string | null> {
@@ -516,5 +517,138 @@ export async function fetchCinematicCloud(): Promise<CinematicShot[]> {
     return merged;
   } catch {
     return getCinematicDB();
+  }
+}
+
+// --- DIRECTIONAL SHOOTS DB ---
+export function getDirectionalShootsDB(): DirectionalShoot[] {
+  if (typeof window === 'undefined') return mockDirectionalShoots;
+  try {
+    const stored = localStorage.getItem(DIRECTIONAL_KEY);
+    if (!stored) {
+      localStorage.setItem(DIRECTIONAL_KEY, JSON.stringify(mockDirectionalShoots));
+      return mockDirectionalShoots;
+    }
+    return JSON.parse(stored);
+  } catch {
+    return mockDirectionalShoots;
+  }
+}
+
+export function saveDirectionalShootsDB(items: DirectionalShoot[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(DIRECTIONAL_KEY, JSON.stringify(items));
+  } catch (e) {
+    console.error('Failed to save directional shoots DB:', e);
+  }
+}
+
+export function addDirectionalShootDB(newItem: DirectionalShoot): DirectionalShoot[] {
+  const current = getDirectionalShootsDB();
+  const updated = [newItem, ...current.filter(item => item.id !== newItem.id)];
+  saveDirectionalShootsDB(updated);
+
+  supabase.from('snap_directional_shoots').upsert([{
+    id: newItem.id,
+    title: newItem.title,
+    description: newItem.description || '',
+    media_url: newItem.media_url || '',
+    cover_image: newItem.cover_image || '',
+    director_notes: newItem.director_notes || '',
+    camera_angle: newItem.camera_angle || '',
+    movement: newItem.movement || '',
+    event: newItem.event || 'General',
+    orientation: newItem.orientation || 'portrait',
+    status: newItem.status || 'published',
+    tags: newItem.tags || []
+  }], { onConflict: 'id' }).then((res) => {
+    if (res?.error) console.warn('Supabase DB Sync (Directional upsert) notice:', res.error.message);
+  });
+
+  return updated;
+}
+
+export function updateDirectionalShootDB(id: string, partial: Partial<DirectionalShoot>): DirectionalShoot[] {
+  const current = getDirectionalShootsDB();
+  const updated = current.map(item => item.id === id ? { ...item, ...partial } : item);
+  saveDirectionalShootsDB(updated);
+
+  supabase.from('snap_directional_shoots').update(partial).eq('id', id).then((res) => {
+    if (res?.error) console.warn('Supabase DB Sync (Directional update) notice:', res.error.message);
+  });
+
+  return updated;
+}
+
+export function deleteDirectionalShootDB(id: string): DirectionalShoot[] {
+  const current = getDirectionalShootsDB();
+  const toDelete = current.find(item => item.id === id);
+  const updated = current.filter(item => item.id !== id);
+  saveDirectionalShootsDB(updated);
+
+  supabase.from('snap_directional_shoots').delete().eq('id', id).then((res) => {
+    if (res?.error) console.warn('Supabase DB Sync (Directional delete) notice:', res.error.message);
+  });
+
+  if (toDelete?.media_url) deleteMediaFromCloudinary(toDelete.media_url);
+  if (toDelete?.cover_image) deleteMediaFromCloudinary(toDelete.cover_image);
+
+  return updated;
+}
+
+export function deleteDirectionalShootsBulkDB(ids: string[]): DirectionalShoot[] {
+  if (!ids || ids.length === 0) return getDirectionalShootsDB();
+  const current = getDirectionalShootsDB();
+  const toDelete = current.filter(item => ids.includes(item.id));
+  const updated = current.filter(item => !ids.includes(item.id));
+  saveDirectionalShootsDB(updated);
+
+  supabase.from('snap_directional_shoots').delete().in('id', ids).then((res) => {
+    if (res?.error) console.warn('Supabase DB Sync (Directional bulk delete) notice:', res.error.message);
+  });
+
+  toDelete.forEach(item => {
+    if (item.media_url) deleteMediaFromCloudinary(item.media_url);
+    if (item.cover_image) deleteMediaFromCloudinary(item.cover_image);
+  });
+
+  return updated;
+}
+
+export async function fetchDirectionalShootsCloud(): Promise<DirectionalShoot[]> {
+  try {
+    const { data, error } = await supabase.from('snap_directional_shoots').select('*').order('created_at', { ascending: false });
+    if (error || !data || data.length === 0) {
+      return getDirectionalShootsDB();
+    }
+    const mapped: DirectionalShoot[] = data.map((d: any) => ({
+      id: d.id,
+      title: d.title,
+      description: d.description || '',
+      media_url: d.media_url || undefined,
+      cover_image: d.cover_image || undefined,
+      director_notes: d.director_notes || undefined,
+      camera_angle: d.camera_angle || undefined,
+      movement: d.movement || undefined,
+      event: d.event || 'General',
+      events: d.events || [d.event || 'General'],
+      orientation: d.orientation || 'portrait',
+      status: d.status || 'published',
+      tags: d.tags || [],
+      created_at: d.created_at || new Date().toISOString()
+    }));
+
+    const local = getDirectionalShootsDB();
+    const map = new Map<string, DirectionalShoot>();
+    mapped.forEach(item => map.set(item.id, item));
+    local.forEach(item => {
+      if (!map.has(item.id)) map.set(item.id, item);
+    });
+    const merged = Array.from(map.values());
+    saveDirectionalShootsDB(merged);
+    return merged;
+  } catch {
+    return getDirectionalShootsDB();
   }
 }

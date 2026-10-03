@@ -98,6 +98,23 @@ export interface TrendingReel {
   created_at: string;
 }
 
+export interface DirectionalShoot {
+  id: string;
+  title: string;
+  description?: string;
+  media_url?: string;
+  cover_image?: string;
+  director_notes?: string; // Vocal cue / instruction to tell couple
+  camera_angle?: string; // e.g. 'Low Angle 45°', 'Eye Level', 'Side Profile'
+  movement?: string; // e.g. 'Slow Walking', 'Veil Twirl', 'Gentle Laugh'
+  event: string;
+  events?: string[];
+  orientation?: 'portrait' | 'landscape';
+  status: PoseStatus;
+  tags?: string[];
+  created_at: string;
+}
+
 export interface ChecklistEvent {
   id: string;
   name: string;

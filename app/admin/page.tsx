@@ -4,28 +4,61 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getUser } from '@/lib/auth-helpers';
-import { mockPoses, mockShotList, mockCinematicShots } from '@/lib/mock-data';
+import { mockShotList } from '@/lib/mock-data';
+import { 
+  getPosesDB, 
+  getTrendingReelsDB, 
+  getCinematicDB, 
+  getDirectionalShootsDB,
+  fetchPosesCloud,
+  fetchTrendingReelsCloud,
+  fetchDirectionalShootsCloud
+} from '@/lib/poses-db-helpers';
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [counts, setCounts] = useState({
+    poses: 0,
+    reels: 0,
+    cinematic: 0,
+    directional: 0,
+    shotList: mockShotList.length,
+    users: 3,
+  });
 
   useEffect(() => {
     // Auth is already handled by the layout, but we load user info here
     const u = getUser();
     if (u) setUser(u);
+
+    setCounts(prev => ({
+      ...prev,
+      poses: getPosesDB().length,
+      reels: getTrendingReelsDB().length,
+      cinematic: getCinematicDB().length,
+      directional: getDirectionalShootsDB().length,
+    }));
+
+    fetchPosesCloud().then(p => { if (p && p.length > 0) setCounts(c => ({ ...c, poses: p.length })); }).catch(() => {});
+    fetchTrendingReelsCloud().then(r => { if (r && r.length > 0) setCounts(c => ({ ...c, reels: r.length })); }).catch(() => {});
+    fetchDirectionalShootsCloud().then(d => { if (d && d.length > 0) setCounts(c => ({ ...c, directional: d.length })); }).catch(() => {});
   }, []); // Run once on mount only
 
   const stats = [
-    { label: 'Total Poses', value: mockPoses.length, icon: '📷', path: '/admin/poses' },
-    { label: 'Shot List Items', value: mockShotList.length, icon: '✓', path: '/admin/shot-list' },
-    { label: 'Cinematic Shots', value: mockCinematicShots.length, icon: '🎬', path: '/admin/cinematic' },
-    { label: 'Active Users', value: 3, icon: '👥', path: '/admin/users' },
+    { label: 'Total Poses', value: counts.poses, icon: '📷', path: '/admin/poses' },
+    { label: 'Trending Reels', value: counts.reels, icon: '🔥', path: '/admin/trending-reels' },
+    { label: 'Directional Shoots', value: counts.directional, icon: '🧭', path: '/admin/directional-shoots' },
+    { label: 'Cinematic Shots', value: counts.cinematic, icon: '🎬', path: '/admin/cinematic' },
+    { label: 'Shot List Items', value: counts.shotList, icon: '✓', path: '/admin/shot-list' },
+    { label: 'Active Users', value: counts.users, icon: '👥', path: '/admin/users' },
   ];
 
   const quickActions = [
     { label: '🎯 Assign Today\'s Shoot', href: '/admin/assign-shoot', primary: true },
     { label: '+ Add New Pose', href: '/admin/poses/new', primary: false },
+    { label: '+ Manage Directional Shoots', href: '/admin/directional-shoots', primary: false },
+    { label: '+ Manage Trending Reels', href: '/admin/trending-reels', primary: false },
     { label: '+ Add Shot', href: '/admin/shot-list', primary: false },
     { label: '+ Manage Users', href: '/admin/users', primary: false },
   ];

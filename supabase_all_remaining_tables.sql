@@ -136,3 +136,25 @@ CREATE TABLE IF NOT EXISTS public.snap_favorites (
 ALTER TABLE public.snap_favorites ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public access to snap_favorites" ON public.snap_favorites;
 CREATE POLICY "Public access to snap_favorites" ON public.snap_favorites FOR ALL USING (true) WITH CHECK (true);
+
+-- 10. DIRECTIONAL SHOOTS TABLE
+CREATE TABLE IF NOT EXISTS public.snap_directional_shoots (
+  id text PRIMARY KEY,
+  title text NOT NULL,
+  description text,
+  media_url text,
+  cover_image text,
+  director_notes text,
+  camera_angle text,
+  movement text,
+  event text DEFAULT 'General',
+  orientation text DEFAULT 'portrait',
+  status text DEFAULT 'published',
+  tags text[] DEFAULT '{}'::text[],
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.snap_directional_shoots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public access to snap_directional_shoots" ON public.snap_directional_shoots;
+CREATE POLICY "Public access to snap_directional_shoots" ON public.snap_directional_shoots FOR ALL USING (true) WITH CHECK (true);
+

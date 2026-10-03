@@ -47,6 +47,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Shot List', path: '/admin/shot-list', icon: '✓' },
     { name: 'Cinematic Shots', path: '/admin/cinematic', icon: '🎬' },
     { name: 'Trending Reels', path: '/admin/trending-reels', icon: '🔥' },
+    { name: 'Directional Shoots', path: '/admin/directional-shoots', icon: '🧭' },
     { name: "Don't Miss This", path: '/admin/dont-miss', icon: '⭐' },
     { name: 'Users', path: '/admin/users', icon: '👥' },
   ];

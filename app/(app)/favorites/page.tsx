@@ -7,33 +7,39 @@ import {
   getPosesDB, 
   getTrendingReelsDB, 
   getCinematicDB, 
+  getDirectionalShootsDB,
   fetchPosesCloud, 
-  fetchTrendingReelsCloud 
+  fetchTrendingReelsCloud,
+  fetchDirectionalShootsCloud
 } from '@/lib/poses-db-helpers';
 import { getTodayShootIds, toggleTodayShoot } from '@/lib/today-shoot-helpers';
-import { Pose, TrendingReel, CinematicShot } from '@/lib/types';
+import { Pose, TrendingReel, CinematicShot, DirectionalShoot } from '@/lib/types';
 
 interface UnifiedFavoriteItem {
   id: string;
   title: string;
-  type: 'pose' | 'reel' | 'cinematic';
+  type: 'pose' | 'reel' | 'cinematic' | 'directional';
   image_url: string;
   video_url?: string;
   event?: string;
   description?: string;
   orientation?: 'portrait' | 'landscape';
+  camera_angle?: string;
+  movement?: string;
+  director_notes?: string;
 }
 
 export default function FavoritesPage() {
   const router = useRouter();
   const [favorites, setFavorites] = useState<string[]>([]);
   const [todayIds, setTodayIds] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<'All' | 'Poses' | 'Reels' | 'Cinematic'>('All');
+  const [activeTab, setActiveTab] = useState<'All' | 'Poses' | 'Reels' | 'Cinematic' | 'Directional'>('All');
   
   // Data sources
   const [allPoses, setAllPoses] = useState<Pose[]>([]);
   const [allReels, setAllReels] = useState<TrendingReel[]>([]);
   const [allCinematic, setAllCinematic] = useState<CinematicShot[]>([]);
+  const [allDirectional, setAllDirectional] = useState<DirectionalShoot[]>([]);
   
   // Active video modal
   const [activeVideo, setActiveVideo] = useState<UnifiedFavoriteItem | null>(null);
@@ -52,10 +58,12 @@ export default function FavoritesPage() {
     setAllPoses(getPosesDB());
     setAllReels(getTrendingReelsDB());
     setAllCinematic(getCinematicDB());
+    setAllDirectional(getDirectionalShootsDB());
 
     // Background sync from cloud to ensure any fresh cloud items are available
     fetchPosesCloud().then(p => { if (p && p.length > 0) setAllPoses(p); }).catch(() => {});
     fetchTrendingReelsCloud().then(r => { if (r && r.length > 0) setAllReels(r); }).catch(() => {});
+    fetchDirectionalShootsCloud().then(d => { if (d && d.length > 0) setAllDirectional(d); }).catch(() => {});
   }, []);
 
   const toggleFav = (e: React.MouseEvent, id: string, title?: string) => {
@@ -123,16 +131,36 @@ export default function FavoritesPage() {
     }
   });
 
+  // 4. Directional Shoots
+  allDirectional.forEach(d => {
+    if (favorites.includes(d.id)) {
+      unifiedItems.push({
+        id: d.id,
+        title: d.title,
+        type: 'directional',
+        image_url: d.cover_image || d.media_url || 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?w=800',
+        video_url: d.media_url?.endsWith('.mp4') ? d.media_url : undefined,
+        event: d.events?.[0] || d.event || 'Directional',
+        description: d.director_notes ? `Director: "${d.director_notes}"` : d.description,
+        camera_angle: d.camera_angle,
+        movement: d.movement,
+        director_notes: d.director_notes,
+      });
+    }
+  });
+
   const filteredItems = unifiedItems.filter(item => {
     if (activeTab === 'Poses') return item.type === 'pose';
     if (activeTab === 'Reels') return item.type === 'reel';
     if (activeTab === 'Cinematic') return item.type === 'cinematic';
+    if (activeTab === 'Directional') return item.type === 'directional';
     return true;
   });
 
   const posesCount = unifiedItems.filter(i => i.type === 'pose').length;
   const reelsCount = unifiedItems.filter(i => i.type === 'reel').length;
   const cinematicCount = unifiedItems.filter(i => i.type === 'cinematic').length;
+  const directionalCount = unifiedItems.filter(i => i.type === 'directional').length;
 
   return (
     <div style={{ padding: '16px', paddingBottom: '90px', minHeight: '100vh', background: '#0a0a0f', color: '#fff' }}>
@@ -185,7 +213,7 @@ export default function FavoritesPage() {
               My Favorites ❤️
             </h1>
             <p style={{ margin: 0, fontSize: '11px', color: '#888' }}>
-              {unifiedItems.length} saved references across poses and reels
+              {unifiedItems.length} saved references across poses, reels, cinematic &amp; directional
             </p>
           </div>
         </div>
@@ -198,6 +226,7 @@ export default function FavoritesPage() {
           { label: 'Poses', count: posesCount },
           { label: 'Reels', count: reelsCount },
           { label: 'Cinematic', count: cinematicCount },
+          { label: 'Directional', count: directionalCount },
         ].map(tab => {
           const isSelected = activeTab === tab.label;
           return (
@@ -229,14 +258,17 @@ export default function FavoritesPage() {
           <div style={{ fontSize: '3.5rem', marginBottom: '15px' }}>💔</div>
           <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '16px' }}>No favorites in this category</h3>
           <p style={{ fontSize: '12px', color: '#777', maxWidth: '280px', margin: 0 }}>
-            Tap the heart ❤️ button on any pose or trending reel to save it here.
+            Tap the heart ❤️ button on any pose, reel, or directional shoot to save it here.
           </p>
-          <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-            <Link href="/poses" style={{ background: '#1a1a26', border: '1px solid #D4AF37', color: '#D4AF37', padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold' }}>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Link href="/poses" style={{ background: '#1a1a26', border: '1px solid #D4AF37', color: '#D4AF37', padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none' }}>
               Browse Poses 📷
             </Link>
-            <Link href="/trending-reels" style={{ background: '#1a1a26', border: '1px solid #D4AF37', color: '#D4AF37', padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold' }}>
+            <Link href="/trending-reels" style={{ background: '#1a1a26', border: '1px solid #D4AF37', color: '#D4AF37', padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none' }}>
               Browse Reels 🔥
+            </Link>
+            <Link href="/directional-shoots" style={{ background: '#1a1a26', border: '1px solid #10b981', color: '#10b981', padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none' }}>
+              Directional Shoots 🧭
             </Link>
           </div>
         </div>
@@ -261,6 +293,8 @@ export default function FavoritesPage() {
                 onClick={() => {
                   if (item.type === 'reel') {
                     setActiveVideo(item);
+                  } else if (item.type === 'directional') {
+                    router.push('/directional-shoots');
                   } else {
                     router.push(`/poses/${item.id}`);
                   }
@@ -292,15 +326,15 @@ export default function FavoritesPage() {
                   {/* Type Badge */}
                   <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 10 }}>
                     <span style={{
-                      backgroundColor: item.type === 'reel' ? '#ef4444' : item.type === 'cinematic' ? '#38bdf8' : '#D4AF37',
-                      color: item.type === 'cinematic' ? '#000' : '#000',
+                      backgroundColor: item.type === 'reel' ? '#ef4444' : item.type === 'cinematic' ? '#38bdf8' : item.type === 'directional' ? '#10b981' : '#D4AF37',
+                      color: item.type === 'cinematic' || item.type === 'directional' ? '#000' : '#000',
                       padding: '2px 6px',
                       borderRadius: '4px',
                       fontSize: '9px',
                       fontWeight: '800',
                       textTransform: 'uppercase',
                     }}>
-                      {item.type === 'reel' ? '🔥 REEL' : item.type === 'cinematic' ? '🎬 VIDEO' : '📷 POSE'}
+                      {item.type === 'reel' ? '🔥 REEL' : item.type === 'cinematic' ? '🎬 VIDEO' : item.type === 'directional' ? '🧭 DIR' : '📷 POSE'}
                     </span>
                   </div>
 

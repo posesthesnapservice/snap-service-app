@@ -179,8 +179,18 @@ export default function HomePage() {
           </>
         )}
 
+        {/* Directional Shoots: For all photographers & cinematographers */}
+        <Link href="/directional-shoots" style={{ textDecoration: 'none' }}>
+          <div className="home-card" style={cardStyle}>
+            <div style={iconStyle}>🧭</div>
+            <h3 style={titleStyle}>DIRECTIONAL SHOOTS</h3>
+            <p style={subtitleStyle}>Director cues &amp; couple pacing</p>
+            <div style={arrowStyle}>→</div>
+          </div>
+        </Link>
+
         {/* General Tools: Don't Miss & AI Assistant */}
-        <Link href="/dont-miss" style={{ textDecoration: 'none', gridColumn: (!hasPhoto || !hasVideo) ? '1 / -1' : undefined }}>
+        <Link href="/dont-miss" style={{ textDecoration: 'none' }}>
           <div className="home-card" style={cardStyle}>
             <div style={iconStyle}>⭐</div>
             <h3 style={titleStyle}>DON&apos;T MISS THIS</h3>
