@@ -257,6 +257,7 @@ export function deleteCinematicDB(id: string): CinematicShot[] {
 
 // --- TRENDING REELS DB ---
 const DELETED_REEL_IDS = new Set(['tr2', 'tr3', 'tr4', 'tr5', 'tr6']);
+const REMOVED_TITLES = ['She is the boss', 'Save this for your next shadi reel'];
 
 export function getTrendingReelsDB(): TrendingReel[] {
   if (typeof window === 'undefined') return mockTrendingReels;
@@ -267,7 +268,19 @@ export function getTrendingReelsDB(): TrendingReel[] {
       return mockTrendingReels;
     }
     const parsed: TrendingReel[] = JSON.parse(stored);
-    const cleaned = parsed.filter(item => !DELETED_REEL_IDS.has(item.id));
+    
+    // Deduplicate by title & remove unwanted bottom row reels
+    const seenTitles = new Set<string>();
+    const cleaned: TrendingReel[] = [];
+    for (const item of parsed) {
+      if (DELETED_REEL_IDS.has(item.id)) continue;
+      if (REMOVED_TITLES.some(rt => item.title.toLowerCase().includes(rt.toLowerCase()))) continue;
+      const normalizedTitle = item.title.trim().toLowerCase();
+      if (seenTitles.has(normalizedTitle)) continue;
+      seenTitles.add(normalizedTitle);
+      cleaned.push(item);
+    }
+
     if (cleaned.length !== parsed.length) {
       localStorage.setItem(REELS_KEY, JSON.stringify(cleaned));
     }
@@ -360,7 +373,7 @@ export async function fetchTrendingReelsCloud(): Promise<TrendingReel[]> {
     }
 
     const mapped: TrendingReel[] = data
-      .filter((d: any) => !DELETED_REEL_IDS.has(d.id))
+      .filter((d: any) => !DELETED_REEL_IDS.has(d.id) && !REMOVED_TITLES.some(rt => (d.title || '').toLowerCase().includes(rt.toLowerCase())))
       .map((d: any) => {
       const rawEvent = d.event || 'General';
       const eventsList = rawEvent.includes(',') 
