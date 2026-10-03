@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getTrendingReelsDB, fetchTrendingReelsCloud } from '@/lib/poses-db-helpers';
 import { TrendingReel } from '@/lib/types';
 import { REEL_EVENTS } from '@/lib/constants';
@@ -18,6 +18,107 @@ export default function TrendingReelsPage() {
   const [activeVideo, setActiveVideo] = useState<TrendingReel | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
+
+  // Swipe-down / drag-to-dismiss modal states
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const touchStartY = useRef<number | null>(null);
+  const touchCurrentY = useRef<number | null>(null);
+  const touchStartTime = useRef<number>(0);
+
+  const handleCloseVideo = () => {
+    setIsClosing(true);
+    setDragY(typeof window !== 'undefined' ? window.innerHeight : 700);
+    setTimeout(() => {
+      setActiveVideo(null);
+      setDragY(0);
+      setIsDragging(false);
+      setIsClosing(false);
+    }, 220);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
+    touchStartY.current = e.touches[0].clientY;
+    touchCurrentY.current = e.touches[0].clientY;
+    touchStartTime.current = Date.now();
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartY.current === null) return;
+    const currentY = e.touches[0].clientY;
+    touchCurrentY.current = currentY;
+    const diff = currentY - touchStartY.current;
+    if (diff > 0) {
+      setDragY(diff);
+    } else {
+      setDragY(diff * 0.15);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartY.current === null) return;
+    const diff = (touchCurrentY.current ?? touchStartY.current) - touchStartY.current;
+    const elapsed = Date.now() - touchStartTime.current;
+    const velocity = diff / Math.max(elapsed, 1);
+
+    if (diff > 80 || (diff > 30 && velocity > 0.35)) {
+      handleCloseVideo();
+    } else {
+      setIsDragging(false);
+      setDragY(0);
+    }
+    touchStartY.current = null;
+    touchCurrentY.current = null;
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
+    touchStartY.current = e.clientY;
+    touchCurrentY.current = e.clientY;
+    touchStartTime.current = Date.now();
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || touchStartY.current === null) return;
+    const currentY = e.clientY;
+    touchCurrentY.current = currentY;
+    const diff = currentY - touchStartY.current;
+    if (diff > 0) {
+      setDragY(diff);
+    } else {
+      setDragY(diff * 0.15);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (!isDragging || touchStartY.current === null) return;
+    const diff = (touchCurrentY.current ?? touchStartY.current) - touchStartY.current;
+    const elapsed = Date.now() - touchStartTime.current;
+    const velocity = diff / Math.max(elapsed, 1);
+
+    if (diff > 80 || (diff > 30 && velocity > 0.35)) {
+      handleCloseVideo();
+    } else {
+      setIsDragging(false);
+      setDragY(0);
+    }
+    touchStartY.current = null;
+    touchCurrentY.current = null;
+  };
+
+  useEffect(() => {
+    if (!activeVideo) {
+      setDragY(0);
+      setIsDragging(false);
+      setIsClosing(false);
+    }
+  }, [activeVideo]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -371,16 +472,117 @@ export default function TrendingReelsPage() {
         })}
       </div>
 
-      {/* Fullscreen Video Player Modal with Full Audio */}
+      {/* Fullscreen Video Player Modal with iOS Swipe-Down Dismiss */}
       {activeVideo && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ width: '100%', maxWidth: (activeVideo.orientation || 'portrait') === 'portrait' ? '400px' : '720px', position: 'relative' }}>
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleCloseVideo();
+            }
+          }}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            background: `rgba(0,0,0,${Math.max(0.25, 0.94 - (Math.max(0, dragY) / 700) * 0.7)})`, 
+            backdropFilter: 'blur(12px)', 
+            WebkitBackdropFilter: 'blur(12px)',
+            zIndex: 2000, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            padding: '12px 16px 24px 16px',
+            overflow: 'hidden',
+            touchAction: 'none'
+          }}
+        >
+          {/* iOS Pull Down Drag Pill */}
+          <div 
+            onTouchStart={handleTouchStart}
+            onMouseDown={handleMouseDown}
+            style={{ 
+              width: '100%', 
+              maxWidth: (activeVideo.orientation || 'portrait') === 'portrait' ? '400px' : '720px',
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              padding: '6px 0 10px 0', 
+              cursor: 'grab',
+              userSelect: 'none',
+              transform: `translateY(${Math.max(0, dragY) * 0.8}px)`,
+              transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s',
+              opacity: isClosing ? 0 : Math.max(0.2, 1 - (dragY / 400))
+            }}
+          >
+            <div style={{ 
+              width: '44px', 
+              height: '5px', 
+              borderRadius: '3px', 
+              background: 'rgba(255,255,255,0.5)', 
+              boxShadow: '0 1px 4px rgba(0,0,0,0.6)' 
+            }} />
+            <span style={{ 
+              fontSize: '11px', 
+              color: 'rgba(255,255,255,0.5)', 
+              marginTop: '5px', 
+              fontWeight: '500', 
+              letterSpacing: '0.2px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}>
+              <span>↓</span> Pull down to close
+            </span>
+          </div>
+
+          {/* Main Video Modal Card */}
+          <div 
+            onTouchStart={handleTouchStart}
+            onMouseDown={handleMouseDown}
+            style={{ 
+              width: '100%', 
+              maxWidth: (activeVideo.orientation || 'portrait') === 'portrait' ? '400px' : '720px', 
+              position: 'relative',
+              transform: `translateY(${Math.max(0, dragY)}px) scale(${Math.max(0.88, 1 - (Math.max(0, dragY) / 1200))})`,
+              transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.22s ease',
+              opacity: isClosing ? 0 : 1,
+              willChange: 'transform, opacity',
+              borderRadius: '16px',
+              cursor: isDragging ? 'grabbing' : 'default'
+            }}
+          >
+            {/* Top Right Floating Close Button - clearly visible & easily reachable */}
             <button 
-              onClick={() => setActiveVideo(null)}
-              style={{ position: 'absolute', top: '-40px', right: 0, background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}
+              onClick={handleCloseVideo}
+              style={{ 
+                position: 'absolute', 
+                top: '12px', 
+                right: '12px', 
+                background: 'rgba(0,0,0,0.65)', 
+                border: '1px solid rgba(255,255,255,0.25)', 
+                color: '#fff', 
+                fontSize: '16px', 
+                cursor: 'pointer',
+                width: '34px',
+                height: '34px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 40,
+                backdropFilter: 'blur(8px)',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.6)'
+              }}
+              title="Close (or swipe down)"
             >
               ✕
             </button>
+
+            {/* Video Frame */}
             <div style={{ 
               width: '100%', 
               paddingTop: (activeVideo.orientation || 'portrait') === 'portrait' ? '140%' : '56.25%', 
@@ -399,19 +601,27 @@ export default function TrendingReelsPage() {
                 playsInline
                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
               />
+
+              {/* Event Badge Top Left */}
+              <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: '6px', zIndex: 30, pointerEvents: 'none' }}>
+                <span style={{ background: '#D4AF37', color: '#000', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                  {activeVideo.event}
+                </span>
+                <span style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', border: '1px solid rgba(255,255,255,0.2)' }}>
+                  {(activeVideo.orientation || 'portrait') === 'portrait' ? '📱 9:16' : '🖥️ 16:9'}
+                </span>
+              </div>
             </div>
-            <div style={{ marginTop: '14px', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+
+            {/* Title & Action Buttons Row */}
+            <div style={{ marginTop: '12px', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <span style={{ background: '#D4AF37', color: '#000', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{activeVideo.event}</span>
-                  <span style={{ fontSize: '11px', color: '#888' }}>{(activeVideo.orientation || 'portrait') === 'portrait' ? '📱 9:16 Vertical Reel' : '🖥️ 16:9 Widescreen Film'}</span>
-                </div>
-                <h2 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: 'bold', color: '#D4AF37' }}>{activeVideo.title}</h2>
-                <p style={{ margin: 0, fontSize: '13px', color: '#ccc', lineHeight: '1.4' }}>{activeVideo.description}</p>
+                <h2 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 'bold', color: '#D4AF37' }}>{activeVideo.title}</h2>
+                <p style={{ margin: 0, fontSize: '12px', color: '#bbb', lineHeight: '1.4' }}>{activeVideo.description}</p>
               </div>
 
               {/* Action buttons inside player */}
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                 <button
                   onClick={(e) => toggleToday(e, activeVideo.id)}
                   style={{
