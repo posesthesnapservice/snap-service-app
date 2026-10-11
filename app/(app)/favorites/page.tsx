@@ -162,7 +162,7 @@ export default function FavoritesPage() {
     setAllDirectional(getDirectionalShootsDB());
 
     // Background sync from cloud to ensure any fresh cloud items are available
-    fetchPosesCloud().then(p => { if (p && p.length > 0) setAllPoses(p); }).catch(() => {});
+    fetchPosesCloud().then(p => { if (p) setAllPoses(p); }).catch(() => {});
     fetchTrendingReelsCloud().then(r => { if (r && r.length > 0) setAllReels(r); }).catch(() => {});
     fetchDirectionalShootsCloud().then(d => { if (d && d.length > 0) setAllDirectional(d); }).catch(() => {});
   }, []);

@@ -40,7 +40,7 @@ export default function AdminDashboard() {
       directional: getDirectionalShootsDB().length,
     }));
 
-    fetchPosesCloud().then(p => { if (p && p.length > 0) setCounts(c => ({ ...c, poses: p.length })); }).catch(() => {});
+    fetchPosesCloud().then(p => { if (p) setCounts(c => ({ ...c, poses: p.length })); }).catch(() => {});
     fetchTrendingReelsCloud().then(r => { if (r && r.length > 0) setCounts(c => ({ ...c, reels: r.length })); }).catch(() => {});
     fetchDirectionalShootsCloud().then(d => { if (d && d.length > 0) setCounts(c => ({ ...c, directional: d.length })); }).catch(() => {});
   }, []); // Run once on mount only

@@ -3,7 +3,14 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Pose } from '@/lib/types';
-import { getPosesDB, savePosesDB, fetchPosesCloud } from '@/lib/poses-db-helpers';
+import { 
+  getPosesDB, 
+  savePosesDB, 
+  fetchPosesCloud, 
+  deletePoseDB, 
+  deletePosesBulkDB, 
+  DEMO_POSE_IDS 
+} from '@/lib/poses-db-helpers';
 
 // SVG Icons
 const PlusIcon = () => (
@@ -50,10 +57,21 @@ export default function AdminPoses() {
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [selected, setSelected] = useState<string[]>([]);
 
+  const [syncing, setSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    setSyncing(true);
+    const cloudPoses = await fetchPosesCloud();
+    if (cloudPoses) {
+      setPoses(cloudPoses);
+    }
+    setTimeout(() => setSyncing(false), 500);
+  };
+
   useEffect(() => {
     setPoses(getPosesDB());
     fetchPosesCloud().then(cloudPoses => {
-      if (cloudPoses && cloudPoses.length > 0) {
+      if (cloudPoses) {
         setPoses(cloudPoses);
       }
     }).catch(() => {});
@@ -82,20 +100,33 @@ export default function AdminPoses() {
   };
 
   const deletePose = (id: string) => {
-    if (confirm('Are you sure you want to delete this pose?')) {
-      const updated = poses.filter(p => p.id !== id);
+    if (confirm('Are you sure you want to delete this pose? It will be removed from Cloud & Local storage.')) {
+      const updated = deletePoseDB(id);
       setPoses(updated);
-      savePosesDB(updated);
       setSelected(selected.filter(s => s !== id));
     }
   };
 
   const deleteSelected = () => {
-    if (confirm(`Are you sure you want to delete the ${selected.length} selected poses?`)) {
-      const updated = poses.filter(p => !selected.includes(p.id));
+    if (selected.length === 0) return;
+    if (confirm(`Are you sure you want to delete the ${selected.length} selected poses from Cloud & Local storage?`)) {
+      const updated = deletePosesBulkDB(selected);
       setPoses(updated);
-      savePosesDB(updated);
       setSelected([]);
+    }
+  };
+
+  const hasDemoPoses = poses.some(p => DEMO_POSE_IDS.has(p.id) || p.id.startsWith('p'));
+  const deleteAllDemoPoses = () => {
+    const demoIds = poses.filter(p => DEMO_POSE_IDS.has(p.id) || p.id.startsWith('p')).map(p => p.id);
+    if (demoIds.length === 0) {
+      alert('No demo poses found to delete!');
+      return;
+    }
+    if (confirm(`Are you sure you want to permanently delete all ${demoIds.length} demo poses from Cloud & Local storage?`)) {
+      const updated = deletePosesBulkDB(demoIds);
+      setPoses(updated);
+      setSelected(selected.filter(s => !demoIds.includes(s)));
     }
   };
 
@@ -136,7 +167,48 @@ export default function AdminPoses() {
           <h1 style={styles.title}>Pose Management</h1>
           <p style={styles.subtitle}>Curate and organize photography poses for snap sessions</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button 
+            onClick={handleManualSync}
+            disabled={syncing}
+            style={{
+              backgroundColor: 'rgba(212,175,55,0.12)',
+              color: '#D4AF37',
+              border: '1px solid rgba(212,175,55,0.3)',
+              padding: '10px 14px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            🔄 {syncing ? 'Syncing...' : 'Sync Cloud'}
+          </button>
+          {hasDemoPoses && (
+            <button 
+              onClick={deleteAllDemoPoses}
+              style={{
+                backgroundColor: '#dc2626',
+                color: '#fff',
+                border: 'none',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 10px rgba(220,38,38,0.3)'
+              }}
+              title="Delete all demo poses permanently from Cloud and Local DB"
+            >
+              <TrashIcon /> Delete All Demo Poses
+            </button>
+          )}
           <Link href="/admin/assign-shoot" style={{ ...styles.addBtn, backgroundColor: '#1a1a26', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.4)' }}>
             🎯 Assign Today&apos;s Shoot
           </Link>
@@ -188,9 +260,17 @@ export default function AdminPoses() {
           </div>
 
           {selected.length > 0 && (
-            <button onClick={deleteSelected} style={styles.deleteBulkBtn}>
-              <TrashIcon /> Delete Selected ({selected.length})
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button 
+                onClick={() => setSelected([])} 
+                style={{ ...styles.deleteBulkBtn, backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa' }}
+              >
+                Clear Selection
+              </button>
+              <button onClick={deleteSelected} style={styles.deleteBulkBtn}>
+                <TrashIcon /> Delete Selected ({selected.length})
+              </button>
+            </div>
           )}
         </div>
       </div>

@@ -33,24 +33,59 @@ export async function uploadMediaToSupabase(file: File, folder = 'reels'): Promi
 }
 
 // --- POSES DB ---
+const DELETED_POSES_KEY = 'snap_deleted_poses_ids';
+export const DEMO_POSE_IDS = new Set(Array.from({ length: 23 }, (_, i) => `p${i + 1}`));
+
+export function getDeletedPoseIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set(DEMO_POSE_IDS);
+  try {
+    const stored = localStorage.getItem(DELETED_POSES_KEY);
+    const parsed: string[] = stored ? JSON.parse(stored) : [];
+    return new Set([...parsed, ...DEMO_POSE_IDS]);
+  } catch {
+    return new Set(DEMO_POSE_IDS);
+  }
+}
+
+export function trackDeletedPoseId(id: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const current = getDeletedPoseIds();
+    current.add(id);
+    localStorage.setItem(DELETED_POSES_KEY, JSON.stringify(Array.from(current)));
+  } catch (e) {
+    console.error('Failed to track deleted pose id:', e);
+  }
+}
+
 export function getPosesDB(): Pose[] {
-  if (typeof window === 'undefined') return mockPoses;
+  if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(POSES_KEY);
+    const deletedIds = getDeletedPoseIds();
+
     if (!stored) {
-      localStorage.setItem(POSES_KEY, JSON.stringify(mockPoses));
-      return mockPoses;
+      const initial = mockPoses.filter(p => !deletedIds.has(p.id));
+      localStorage.setItem(POSES_KEY, JSON.stringify(initial));
+      return initial;
     }
-    return JSON.parse(stored);
+    const parsed: Pose[] = JSON.parse(stored);
+    const cleaned = parsed.filter(p => !deletedIds.has(p.id));
+    if (cleaned.length !== parsed.length) {
+      localStorage.setItem(POSES_KEY, JSON.stringify(cleaned));
+    }
+    return cleaned;
   } catch {
-    return mockPoses;
+    return [];
   }
 }
 
 export function savePosesDB(poses: Pose[]): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(POSES_KEY, JSON.stringify(poses));
+    const deletedIds = getDeletedPoseIds();
+    const cleaned = poses.filter(p => !deletedIds.has(p.id));
+    localStorage.setItem(POSES_KEY, JSON.stringify(cleaned));
   } catch (e) {
     console.error('Failed to save poses DB:', e);
   }
@@ -58,7 +93,7 @@ export function savePosesDB(poses: Pose[]): void {
 
 export function addPoseDB(newPose: Pose): Pose[] {
   const current = getPosesDB();
-  const updated = [newPose, ...current];
+  const updated = [newPose, ...current.filter(p => p.id !== newPose.id)];
   savePosesDB(updated);
   
   // Async sync to Supabase Database table
@@ -91,6 +126,7 @@ export function updatePoseDB(id: string, partial: Partial<Pose>): Pose[] {
 }
 
 export function deletePoseDB(id: string): Pose[] {
+  trackDeletedPoseId(id);
   const current = getPosesDB();
   const toDelete = current.find(p => p.id === id);
   const updated = current.filter(p => p.id !== id);
@@ -100,9 +136,30 @@ export function deletePoseDB(id: string): Pose[] {
     if (res && res.error) console.warn('Supabase DB Sync (Poses delete) notice:', res.error.message);
   });
 
-  if (toDelete?.image_url) {
+  if (toDelete?.image_url && toDelete.image_url.includes('cloudinary')) {
     deleteMediaFromCloudinary(toDelete.image_url);
   }
+
+  return updated;
+}
+
+export function deletePosesBulkDB(ids: string[]): Pose[] {
+  if (!ids || ids.length === 0) return getPosesDB();
+  ids.forEach(id => trackDeletedPoseId(id));
+  const current = getPosesDB();
+  const toDelete = current.filter(p => ids.includes(p.id));
+  const updated = current.filter(p => !ids.includes(p.id));
+  savePosesDB(updated);
+
+  supabase.from('snap_poses').delete().in('id', ids).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Poses bulk delete) notice:', res.error.message);
+  });
+
+  toDelete.forEach(p => {
+    if (p.image_url && p.image_url.includes('cloudinary')) {
+      deleteMediaFromCloudinary(p.image_url);
+    }
+  });
 
   return updated;
 }
@@ -432,22 +489,28 @@ export async function fetchTrendingReelsCloud(): Promise<TrendingReel[]> {
 export async function fetchPosesCloud(): Promise<Pose[]> {
   try {
     const { data, error } = await supabase.from('snap_poses').select('*').order('created_at', { ascending: false });
-    if (error || !data || data.length === 0) {
+    if (error) {
+      console.warn('Supabase DB Sync (Poses fetch) notice:', error.message);
       return getPosesDB();
     }
-    const mapped: Pose[] = data.map((d: any) => ({
-      id: d.id,
-      title: d.title,
-      image_url: d.image_url,
-      instructions: d.instructions || '',
-      subjects: d.subjects || [],
-      shoot_types: d.shoot_types || [],
-      events: d.events || [],
-      tags: d.tags || [],
-      status: d.status || 'published',
-      created_at: d.created_at || new Date().toISOString(),
-      updated_at: d.created_at || new Date().toISOString()
-    }));
+
+    const deletedIds = getDeletedPoseIds();
+    const mapped: Pose[] = (data || [])
+      .filter((d: any) => !deletedIds.has(d.id))
+      .map((d: any) => ({
+        id: d.id,
+        title: d.title,
+        image_url: d.image_url,
+        instructions: d.instructions || '',
+        subjects: d.subjects || [],
+        shoot_types: d.shoot_types || [],
+        events: d.events || [],
+        tags: d.tags || [],
+        status: d.status || 'published',
+        created_at: d.created_at || new Date().toISOString(),
+        updated_at: d.created_at || new Date().toISOString()
+      }));
+
     savePosesDB(mapped);
     return mapped;
   } catch {

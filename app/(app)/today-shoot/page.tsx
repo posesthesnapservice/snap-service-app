@@ -80,7 +80,7 @@ export default function TodayShootPage() {
     setAllDirectional(getDirectionalShootsDB());
 
     // Background fetch fresh items from Supabase cloud
-    fetchPosesCloud().then(p => { if (p && p.length > 0) setAllPoses(p); }).catch(() => {});
+    fetchPosesCloud().then(p => { if (p) setAllPoses(p); }).catch(() => {});
     fetchTrendingReelsCloud().then(r => { if (r && r.length > 0) setAllReels(r); }).catch(() => {});
     fetchCinematicCloud().then(c => { if (c && c.length > 0) setAllCinematic(c); }).catch(() => {});
     fetchDirectionalShootsCloud().then(d => { if (d && d.length > 0) setAllDirectional(d); }).catch(() => {});

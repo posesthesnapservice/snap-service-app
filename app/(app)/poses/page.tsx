@@ -49,7 +49,7 @@ export default function PosesPage() {
 
     // Sync cloud poses from Supabase
     fetchPosesCloud().then(cloudPoses => {
-      if (cloudPoses && cloudPoses.length > 0) {
+      if (cloudPoses) {
         setPosesList(cloudPoses);
       }
     }).catch(() => {});

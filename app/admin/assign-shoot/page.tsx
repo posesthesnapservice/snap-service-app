@@ -33,7 +33,7 @@ export default function AdminAssignShootPage() {
     const p = getPosesDB();
     setPoses(p);
     fetchPosesCloud().then(cloudPoses => {
-      if (cloudPoses && cloudPoses.length > 0) setPoses(cloudPoses);
+      if (cloudPoses) setPoses(cloudPoses);
     }).catch(() => {});
 
     const userParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('user') : null;
