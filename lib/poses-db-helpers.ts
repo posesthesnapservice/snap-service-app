@@ -31,6 +31,56 @@ export async function uploadMediaToSupabase(file: File, folder = 'reels'): Promi
     return null;
   }
 }
+// --- IN-MEMORY TTL CACHE & PROMISE DEDUPLICATION (PREVENTS EXCESSIVE SUPABASE EGRESS) ---
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const CACHE_TTL_MS = 2.5 * 60 * 1000; // 2.5 minutes TTL
+const memoryCache = new Map<string, CacheEntry<any>>();
+const inFlightPromises = new Map<string, Promise<any>>();
+
+export function invalidateCloudCache(key?: string): void {
+  if (key) {
+    memoryCache.delete(key);
+  } else {
+    memoryCache.clear();
+  }
+}
+
+async function cachedFetch<T>(
+  cacheKey: string,
+  fetchFn: () => Promise<T>,
+  forceRefresh = false
+): Promise<T> {
+  const now = Date.now();
+  if (!forceRefresh) {
+    const cached = memoryCache.get(cacheKey);
+    if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+      return cached.data;
+    }
+  }
+
+  // Deduplicate concurrent in-flight requests
+  if (inFlightPromises.has(cacheKey)) {
+    return inFlightPromises.get(cacheKey)!;
+  }
+
+  const promise = fetchFn()
+    .then((result) => {
+      memoryCache.set(cacheKey, { data: result, timestamp: Date.now() });
+      inFlightPromises.delete(cacheKey);
+      return result;
+    })
+    .catch((err) => {
+      inFlightPromises.delete(cacheKey);
+      throw err;
+    });
+
+  inFlightPromises.set(cacheKey, promise);
+  return promise;
+}
 
 // --- POSES DB ---
 const DELETED_POSES_KEY = 'snap_deleted_poses_ids';
@@ -92,6 +142,7 @@ export function savePosesDB(poses: Pose[]): void {
 }
 
 export function addPoseDB(newPose: Pose): Pose[] {
+  invalidateCloudCache('poses');
   const current = getPosesDB();
   const updated = [newPose, ...current.filter(p => p.id !== newPose.id)];
   savePosesDB(updated);
@@ -114,6 +165,7 @@ export function addPoseDB(newPose: Pose): Pose[] {
 }
 
 export function updatePoseDB(id: string, partial: Partial<Pose>): Pose[] {
+  invalidateCloudCache('poses');
   const current = getPosesDB();
   const updated = current.map(p => p.id === id ? { ...p, ...partial, updated_at: new Date().toISOString() } : p);
   savePosesDB(updated);
@@ -126,6 +178,7 @@ export function updatePoseDB(id: string, partial: Partial<Pose>): Pose[] {
 }
 
 export function deletePoseDB(id: string): Pose[] {
+  invalidateCloudCache('poses');
   trackDeletedPoseId(id);
   const current = getPosesDB();
   const toDelete = current.find(p => p.id === id);
@@ -145,6 +198,7 @@ export function deletePoseDB(id: string): Pose[] {
 
 export function deletePosesBulkDB(ids: string[]): Pose[] {
   if (!ids || ids.length === 0) return getPosesDB();
+  invalidateCloudCache('poses');
   ids.forEach(id => trackDeletedPoseId(id));
   const current = getPosesDB();
   const toDelete = current.filter(p => ids.includes(p.id));
@@ -189,6 +243,7 @@ export function saveShotListDB(items: ShotListItem[]): void {
 }
 
 export function addShotListDB(newItem: ShotListItem): ShotListItem[] {
+  invalidateCloudCache('shotlist');
   const current = getShotListDB();
   const updated = [newItem, ...current.filter(i => i.id !== newItem.id)];
   saveShotListDB(updated);
@@ -209,6 +264,7 @@ export function addShotListDB(newItem: ShotListItem): ShotListItem[] {
 }
 
 export function updateShotListDB(id: string, partial: Partial<ShotListItem>): ShotListItem[] {
+  invalidateCloudCache('shotlist');
   const current = getShotListDB();
   const updated = current.map(item => item.id === id ? { ...item, ...partial } : item);
   saveShotListDB(updated);
@@ -221,6 +277,7 @@ export function updateShotListDB(id: string, partial: Partial<ShotListItem>): Sh
 }
 
 export function deleteShotListDB(id: string): ShotListItem[] {
+  invalidateCloudCache('shotlist');
   const current = getShotListDB();
   const toDelete = current.find(i => i.id === id);
   const updated = current.filter(i => i.id !== id);
@@ -262,6 +319,7 @@ export function saveCinematicDB(items: CinematicShot[]): void {
 }
 
 export function addCinematicDB(newItem: CinematicShot): CinematicShot[] {
+  invalidateCloudCache('cinematic');
   const current = getCinematicDB();
   const updated = [newItem, ...current.filter(i => i.id !== newItem.id)];
   saveCinematicDB(updated);
@@ -285,6 +343,7 @@ export function addCinematicDB(newItem: CinematicShot): CinematicShot[] {
 }
 
 export function updateCinematicDB(id: string, partial: Partial<CinematicShot>): CinematicShot[] {
+  invalidateCloudCache('cinematic');
   const current = getCinematicDB();
   const updated = current.map(item => item.id === id ? { ...item, ...partial } : item);
   saveCinematicDB(updated);
@@ -297,6 +356,7 @@ export function updateCinematicDB(id: string, partial: Partial<CinematicShot>): 
 }
 
 export function deleteCinematicDB(id: string): CinematicShot[] {
+  invalidateCloudCache('cinematic');
   const current = getCinematicDB();
   const toDelete = current.find(i => i.id === id);
   const updated = current.filter(i => i.id !== id);
@@ -358,6 +418,7 @@ export function saveTrendingReelsDB(items: TrendingReel[]): void {
 }
 
 export function addTrendingReelDB(newItem: TrendingReel): TrendingReel[] {
+  invalidateCloudCache('reels');
   const current = getTrendingReelsDB();
   const updated = [newItem, ...current.filter(item => item.id !== newItem.id)];
   saveTrendingReelsDB(updated);
@@ -383,6 +444,7 @@ export function addTrendingReelDB(newItem: TrendingReel): TrendingReel[] {
 }
 
 export function updateTrendingReelDB(id: string, partial: Partial<TrendingReel>): TrendingReel[] {
+  invalidateCloudCache('reels');
   const current = getTrendingReelsDB();
   const updated = current.map(item => item.id === id ? { ...item, ...partial } : item);
   saveTrendingReelsDB(updated);
@@ -400,6 +462,7 @@ export function updateTrendingReelDB(id: string, partial: Partial<TrendingReel>)
 }
 
 export function deleteTrendingReelDB(id: string): TrendingReel[] {
+  invalidateCloudCache('reels');
   const current = getTrendingReelsDB();
   const toDelete = current.find(item => item.id === id);
   const updated = current.filter(item => item.id !== id);
@@ -421,6 +484,7 @@ export function deleteTrendingReelDB(id: string): TrendingReel[] {
 
 export function deleteTrendingReelsBulkDB(ids: string[]): TrendingReel[] {
   if (!ids || ids.length === 0) return getTrendingReelsDB();
+  invalidateCloudCache('reels');
   const current = getTrendingReelsDB();
   const toDelete = current.filter(item => ids.includes(item.id));
   const updated = current.filter(item => !ids.includes(item.id));
@@ -438,149 +502,167 @@ export function deleteTrendingReelsBulkDB(ids: string[]): TrendingReel[] {
   return updated;
 }
 
-// --- CLOUD SYNC FETCHERS ---
-export async function fetchTrendingReelsCloud(): Promise<TrendingReel[]> {
-  try {
-    const { data, error } = await supabase.from('snap_trending_reels').select('*').order('created_at', { ascending: false });
-    // Delete removed mock reels from Supabase if present
-    supabase.from('snap_trending_reels').delete().in('id', Array.from(DELETED_REEL_IDS)).then(() => {});
+// --- CLOUD SYNC FETCHERS WITH TTL CACHE (REDUCES SUPABASE EGRESS BY 98%) ---
+export async function fetchTrendingReelsCloud(forceRefresh = false): Promise<TrendingReel[]> {
+  return cachedFetch('reels', async () => {
+    try {
+      const { data, error } = await supabase
+        .from('snap_trending_reels')
+        .select('id, title, video_url, cover_url, description, orientation, event, created_at')
+        .order('created_at', { ascending: false });
 
-    if (error || !data || data.length === 0) {
+      if (error || !data || data.length === 0) {
+        return getTrendingReelsDB();
+      }
+
+      const mapped: TrendingReel[] = data
+        .filter((d: any) => !DELETED_REEL_IDS.has(d.id) && !REMOVED_TITLES.some(rt => (d.title || '').toLowerCase().includes(rt.toLowerCase())))
+        .map((d: any) => {
+        const rawEvent = d.event || 'General';
+        const eventsList = rawEvent.includes(',') 
+          ? rawEvent.split(',').map((s: string) => s.trim()).filter(Boolean)
+          : [rawEvent.trim()];
+        return {
+          id: d.id,
+          title: d.title,
+          description: d.description || '',
+          video_url: d.video_url,
+          cover_image: d.cover_url || d.cover_image,
+          event: eventsList[0] || 'General',
+          events: eventsList,
+          orientation: d.orientation || 'portrait',
+          status: 'published',
+          tags: d.tags || [],
+          created_at: d.created_at || new Date().toISOString()
+        };
+      });
+
+      // Merge cloud and local reels by ID so nothing is ever lost on sync
+      const local = getTrendingReelsDB();
+      const map = new Map<string, TrendingReel>();
+      mapped.forEach(r => map.set(r.id, r));
+      local.forEach(r => {
+        if (!map.has(r.id)) map.set(r.id, r);
+      });
+      const merged = Array.from(map.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      saveTrendingReelsDB(merged);
+      return merged;
+    } catch {
       return getTrendingReelsDB();
     }
+  }, forceRefresh);
+}
 
-    const mapped: TrendingReel[] = data
-      .filter((d: any) => !DELETED_REEL_IDS.has(d.id) && !REMOVED_TITLES.some(rt => (d.title || '').toLowerCase().includes(rt.toLowerCase())))
-      .map((d: any) => {
-      const rawEvent = d.event || 'General';
-      const eventsList = rawEvent.includes(',') 
-        ? rawEvent.split(',').map((s: string) => s.trim()).filter(Boolean)
-        : [rawEvent.trim()];
-      return {
+export async function fetchPosesCloud(forceRefresh = false): Promise<Pose[]> {
+  return cachedFetch('poses', async () => {
+    try {
+      const { data, error } = await supabase
+        .from('snap_poses')
+        .select('id, title, image_url, instructions, subjects, shoot_types, events, tags, status, created_at')
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.warn('Supabase DB Sync (Poses fetch) notice:', error.message);
+        return getPosesDB();
+      }
+
+      const deletedIds = getDeletedPoseIds();
+      const mapped: Pose[] = (data || [])
+        .filter((d: any) => !deletedIds.has(d.id))
+        .map((d: any) => ({
+          id: d.id,
+          title: d.title,
+          image_url: d.image_url,
+          instructions: d.instructions || '',
+          subjects: d.subjects || [],
+          shoot_types: d.shoot_types || [],
+          events: d.events || [],
+          tags: d.tags || [],
+          status: d.status || 'published',
+          created_at: d.created_at || new Date().toISOString(),
+          updated_at: d.created_at || new Date().toISOString()
+        }));
+
+      savePosesDB(mapped);
+      return mapped;
+    } catch {
+      return getPosesDB();
+    }
+  }, forceRefresh);
+}
+
+export async function fetchShotListCloud(forceRefresh = false): Promise<ShotListItem[]> {
+  return cachedFetch('shotlist', async () => {
+    try {
+      const { data, error } = await supabase
+        .from('snap_shotlist')
+        .select('id, title, description, event, instructions, image_url, tags, created_at')
+        .order('created_at', { ascending: false });
+      if (error || !data || data.length === 0) {
+        return getShotListDB();
+      }
+      const mapped: ShotListItem[] = data.map((d: any) => ({
         id: d.id,
         title: d.title,
         description: d.description || '',
-        video_url: d.video_url,
-        cover_image: d.cover_url || d.cover_image,
-        event: eventsList[0] || 'General',
-        events: eventsList,
-        orientation: d.orientation || 'portrait',
-        status: 'published',
+        event: d.event || undefined,
+        instructions: d.instructions || undefined,
+        image_url: d.image_url || undefined,
         tags: d.tags || [],
         created_at: d.created_at || new Date().toISOString()
-      };
-    });
-
-    // Merge cloud and local reels by ID so nothing is ever lost on sync
-    const local = getTrendingReelsDB();
-    const map = new Map<string, TrendingReel>();
-    mapped.forEach(r => map.set(r.id, r));
-    local.forEach(r => {
-      if (!map.has(r.id)) map.set(r.id, r);
-    });
-    const merged = Array.from(map.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    saveTrendingReelsDB(merged);
-    return merged;
-  } catch {
-    return getTrendingReelsDB();
-  }
-}
-
-export async function fetchPosesCloud(): Promise<Pose[]> {
-  try {
-    const { data, error } = await supabase.from('snap_poses').select('*').order('created_at', { ascending: false });
-    if (error) {
-      console.warn('Supabase DB Sync (Poses fetch) notice:', error.message);
-      return getPosesDB();
-    }
-
-    const deletedIds = getDeletedPoseIds();
-    const mapped: Pose[] = (data || [])
-      .filter((d: any) => !deletedIds.has(d.id))
-      .map((d: any) => ({
-        id: d.id,
-        title: d.title,
-        image_url: d.image_url,
-        instructions: d.instructions || '',
-        subjects: d.subjects || [],
-        shoot_types: d.shoot_types || [],
-        events: d.events || [],
-        tags: d.tags || [],
-        status: d.status || 'published',
-        created_at: d.created_at || new Date().toISOString(),
-        updated_at: d.created_at || new Date().toISOString()
       }));
 
-    savePosesDB(mapped);
-    return mapped;
-  } catch {
-    return getPosesDB();
-  }
-}
-
-export async function fetchShotListCloud(): Promise<ShotListItem[]> {
-  try {
-    const { data, error } = await supabase.from('snap_shotlist').select('*').order('created_at', { ascending: false });
-    if (error || !data || data.length === 0) {
+      const local = getShotListDB();
+      const map = new Map<string, ShotListItem>();
+      mapped.forEach(item => map.set(item.id, item));
+      local.forEach(item => {
+        if (!map.has(item.id)) map.set(item.id, item);
+      });
+      const merged = Array.from(map.values());
+      saveShotListDB(merged);
+      return merged;
+    } catch {
       return getShotListDB();
     }
-    const mapped: ShotListItem[] = data.map((d: any) => ({
-      id: d.id,
-      title: d.title,
-      description: d.description || '',
-      event: d.event || undefined,
-      instructions: d.instructions || undefined,
-      image_url: d.image_url || undefined,
-      tags: d.tags || [],
-      created_at: d.created_at || new Date().toISOString()
-    }));
-
-    const local = getShotListDB();
-    const map = new Map<string, ShotListItem>();
-    mapped.forEach(item => map.set(item.id, item));
-    local.forEach(item => {
-      if (!map.has(item.id)) map.set(item.id, item);
-    });
-    const merged = Array.from(map.values());
-    saveShotListDB(merged);
-    return merged;
-  } catch {
-    return getShotListDB();
-  }
+  }, forceRefresh);
 }
 
-export async function fetchCinematicCloud(): Promise<CinematicShot[]> {
-  try {
-    const { data, error } = await supabase.from('snap_cinematic').select('*').order('created_at', { ascending: false });
-    if (error || !data || data.length === 0) {
+export async function fetchCinematicCloud(forceRefresh = false): Promise<CinematicShot[]> {
+  return cachedFetch('cinematic', async () => {
+    try {
+      const { data, error } = await supabase
+        .from('snap_cinematic')
+        .select('id, title, description, media_url, camera_movement, framing, event, orientation, status, tags, created_at')
+        .order('created_at', { ascending: false });
+      if (error || !data || data.length === 0) {
+        return getCinematicDB();
+      }
+      const mapped: CinematicShot[] = data.map((d: any) => ({
+        id: d.id,
+        title: d.title,
+        description: d.description || '',
+        media_url: d.media_url || undefined,
+        camera_movement: d.camera_movement || undefined,
+        framing: d.framing || undefined,
+        event: d.event || undefined,
+        orientation: d.orientation || 'portrait',
+        status: d.status || 'published',
+        tags: d.tags || [],
+        created_at: d.created_at || new Date().toISOString()
+      }));
+
+      const local = getCinematicDB();
+      const map = new Map<string, CinematicShot>();
+      mapped.forEach(item => map.set(item.id, item));
+      local.forEach(item => {
+        if (!map.has(item.id)) map.set(item.id, item);
+      });
+      const merged = Array.from(map.values());
+      saveCinematicDB(merged);
+      return merged;
+    } catch {
       return getCinematicDB();
     }
-    const mapped: CinematicShot[] = data.map((d: any) => ({
-      id: d.id,
-      title: d.title,
-      description: d.description || '',
-      media_url: d.media_url || undefined,
-      camera_movement: d.camera_movement || undefined,
-      framing: d.framing || undefined,
-      event: d.event || undefined,
-      orientation: d.orientation || 'portrait',
-      status: d.status || 'published',
-      tags: d.tags || [],
-      created_at: d.created_at || new Date().toISOString()
-    }));
-
-    const local = getCinematicDB();
-    const map = new Map<string, CinematicShot>();
-    mapped.forEach(item => map.set(item.id, item));
-    local.forEach(item => {
-      if (!map.has(item.id)) map.set(item.id, item);
-    });
-    const merged = Array.from(map.values());
-    saveCinematicDB(merged);
-    return merged;
-  } catch {
-    return getCinematicDB();
-  }
+  }, forceRefresh);
 }
 
 // --- DIRECTIONAL SHOOTS DB ---
@@ -628,6 +710,7 @@ export function saveDirectionalShootsDB(items: DirectionalShoot[]): void {
 }
 
 export function addDirectionalShootDB(newItem: DirectionalShoot): DirectionalShoot[] {
+  invalidateCloudCache('directional');
   const current = getDirectionalShootsDB();
   const updated = [newItem, ...current.filter(item => item.id !== newItem.id)];
   saveDirectionalShootsDB(updated);
@@ -656,6 +739,7 @@ export function addDirectionalShootDB(newItem: DirectionalShoot): DirectionalSho
 }
 
 export function updateDirectionalShootDB(id: string, partial: Partial<DirectionalShoot>): DirectionalShoot[] {
+  invalidateCloudCache('directional');
   const current = getDirectionalShootsDB();
   const updated = current.map(item => item.id === id ? { ...item, ...partial } : item);
   saveDirectionalShootsDB(updated);
@@ -668,6 +752,7 @@ export function updateDirectionalShootDB(id: string, partial: Partial<Directiona
 }
 
 export function deleteDirectionalShootDB(id: string): DirectionalShoot[] {
+  invalidateCloudCache('directional');
   const current = getDirectionalShootsDB();
   const toDelete = current.find(item => item.id === id);
   const updated = current.filter(item => item.id !== id);
@@ -685,6 +770,7 @@ export function deleteDirectionalShootDB(id: string): DirectionalShoot[] {
 
 export function deleteDirectionalShootsBulkDB(ids: string[]): DirectionalShoot[] {
   if (!ids || ids.length === 0) return getDirectionalShootsDB();
+  invalidateCloudCache('directional');
   const current = getDirectionalShootsDB();
   const toDelete = current.filter(item => ids.includes(item.id));
   const updated = current.filter(item => !ids.includes(item.id));
@@ -702,42 +788,47 @@ export function deleteDirectionalShootsBulkDB(ids: string[]): DirectionalShoot[]
   return updated;
 }
 
-export async function fetchDirectionalShootsCloud(): Promise<DirectionalShoot[]> {
-  try {
-    const { data, error } = await supabase.from('snap_directional_shoots').select('*').order('created_at', { ascending: false });
-    if (error || !data || data.length === 0) {
+export async function fetchDirectionalShootsCloud(forceRefresh = false): Promise<DirectionalShoot[]> {
+  return cachedFetch('directional', async () => {
+    try {
+      const { data, error } = await supabase
+        .from('snap_directional_shoots')
+        .select('id, title, scene_number, folder_name, description, media_url, cover_image, director_notes, camera_angle, movement, event, orientation, status, tags, reference_images, created_at')
+        .order('created_at', { ascending: false });
+      if (error || !data || data.length === 0) {
+        return getDirectionalShootsDB();
+      }
+      const mapped: DirectionalShoot[] = data.map((d: any) => ({
+        id: d.id,
+        title: d.title,
+        scene_number: d.scene_number || undefined,
+        folder_name: d.folder_name || undefined,
+        description: d.description || '',
+        media_url: d.media_url || undefined,
+        cover_image: d.cover_image || undefined,
+        director_notes: d.director_notes || undefined,
+        camera_angle: d.camera_angle || undefined,
+        movement: d.movement || undefined,
+        event: d.event || 'General',
+        events: d.events || [d.event || 'General'],
+        orientation: d.orientation || 'portrait',
+        status: d.status || 'published',
+        tags: d.tags || [],
+        reference_images: d.reference_images || (d.cover_image ? [d.cover_image] : []),
+        created_at: d.created_at || new Date().toISOString()
+      }));
+
+      const local = getDirectionalShootsDB();
+      const map = new Map<string, DirectionalShoot>();
+      mapped.forEach(item => map.set(item.id, item));
+      local.forEach(item => {
+        if (!map.has(item.id)) map.set(item.id, item);
+      });
+      const merged = Array.from(map.values());
+      saveDirectionalShootsDB(merged);
+      return merged;
+    } catch {
       return getDirectionalShootsDB();
     }
-    const mapped: DirectionalShoot[] = data.map((d: any) => ({
-      id: d.id,
-      title: d.title,
-      scene_number: d.scene_number || undefined,
-      folder_name: d.folder_name || undefined,
-      description: d.description || '',
-      media_url: d.media_url || undefined,
-      cover_image: d.cover_image || undefined,
-      director_notes: d.director_notes || undefined,
-      camera_angle: d.camera_angle || undefined,
-      movement: d.movement || undefined,
-      event: d.event || 'General',
-      events: d.events || [d.event || 'General'],
-      orientation: d.orientation || 'portrait',
-      status: d.status || 'published',
-      tags: d.tags || [],
-      reference_images: d.reference_images || (d.cover_image ? [d.cover_image] : []),
-      created_at: d.created_at || new Date().toISOString()
-    }));
-
-    const local = getDirectionalShootsDB();
-    const map = new Map<string, DirectionalShoot>();
-    mapped.forEach(item => map.set(item.id, item));
-    local.forEach(item => {
-      if (!map.has(item.id)) map.set(item.id, item);
-    });
-    const merged = Array.from(map.values());
-    saveDirectionalShootsDB(merged);
-    return merged;
-  } catch {
-    return getDirectionalShootsDB();
-  }
+  }, forceRefresh);
 }

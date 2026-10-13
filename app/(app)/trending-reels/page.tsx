@@ -127,7 +127,7 @@ export default function TrendingReelsPage() {
 
   const handleManualSync = async () => {
     setSyncing(true);
-    const cloud = await fetchTrendingReelsCloud();
+    const cloud = await fetchTrendingReelsCloud(true);
     if (cloud && cloud.length > 0) {
       setReels(cloud.filter(r => r.status !== 'hidden'));
     }

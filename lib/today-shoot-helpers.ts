@@ -134,10 +134,22 @@ export function toggleTodayShootDone(poseId: string): string[] {
   return updated;
 }
 
-// --- SUPABASE CLOUD SYNC FOR TODAY'S SHOOT ---
+// --- SUPABASE CLOUD SYNC FOR TODAY'S SHOOT WITH TTL CACHING ---
+const todayCache = new Map<string, { data: { poseIds: string[]; doneIds: string[] }; timestamp: number }>();
+const inFlightTodayPromise = new Map<string, Promise<{ poseIds: string[]; doneIds: string[] }>>();
+const TODAY_CACHE_TTL = 60 * 1000; // 60 seconds
+
+export function invalidateTodayShootCache(userId?: string): void {
+  if (userId) {
+    todayCache.delete(userId);
+  } else {
+    todayCache.clear();
+  }
+}
 
 export function syncTodayShootCloud(userId: string, poseIds: string[], doneIds: string[]): void {
   if (!userId || userId === 'guest') return;
+  invalidateTodayShootCache(userId);
   const u = getUser();
   try {
     supabase.from('snap_today_shoots').upsert([{
@@ -155,33 +167,54 @@ export function syncTodayShootCloud(userId: string, poseIds: string[], doneIds: 
   }
 }
 
-export async function fetchTodayShootCloud(targetUserId?: string): Promise<{ poseIds: string[]; doneIds: string[] }> {
+export async function fetchTodayShootCloud(targetUserId?: string, forceRefresh = false): Promise<{ poseIds: string[]; doneIds: string[] }> {
   const { userId, shootKey, doneKey } = getKeys(targetUserId);
   if (!userId || userId === 'guest') {
     return { poseIds: getTodayShootIds(), doneIds: getTodayShootDoneIds() };
   }
 
-  try {
-    const { data, error } = await supabase
-      .from('snap_today_shoots')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error || !data) {
-      return { poseIds: getTodayShootIds(userId), doneIds: getTodayShootDoneIds(userId) };
+  const now = Date.now();
+  if (!forceRefresh) {
+    const cached = todayCache.get(userId);
+    if (cached && (now - cached.timestamp < TODAY_CACHE_TTL)) {
+      return cached.data;
     }
-
-    const cloudPoseIds: string[] = data.pose_ids || [];
-    const cloudDoneIds: string[] = data.done_ids || [];
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(shootKey, JSON.stringify(cloudPoseIds));
-      localStorage.setItem(doneKey, JSON.stringify(cloudDoneIds));
-    }
-
-    return { poseIds: cloudPoseIds, doneIds: cloudDoneIds };
-  } catch {
-    return { poseIds: getTodayShootIds(userId), doneIds: getTodayShootDoneIds(userId) };
   }
+
+  if (inFlightTodayPromise.has(userId)) {
+    return inFlightTodayPromise.get(userId)!;
+  }
+
+  const promise = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from('snap_today_shoots')
+        .select('id, user_id, user_name, pose_ids, done_ids, updated_at')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error || !data) {
+        return { poseIds: getTodayShootIds(userId), doneIds: getTodayShootDoneIds(userId) };
+      }
+
+      const cloudPoseIds: string[] = data.pose_ids || [];
+      const cloudDoneIds: string[] = data.done_ids || [];
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(shootKey, JSON.stringify(cloudPoseIds));
+        localStorage.setItem(doneKey, JSON.stringify(cloudDoneIds));
+      }
+
+      const result = { poseIds: cloudPoseIds, doneIds: cloudDoneIds };
+      todayCache.set(userId, { data: result, timestamp: Date.now() });
+      return result;
+    } catch {
+      return { poseIds: getTodayShootIds(userId), doneIds: getTodayShootDoneIds(userId) };
+    } finally {
+      inFlightTodayPromise.delete(userId);
+    }
+  })();
+
+  inFlightTodayPromise.set(userId, promise);
+  return promise;
 }

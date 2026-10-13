@@ -32,7 +32,7 @@ export default function DirectionalShootsPage() {
 
   const handleManualSync = async () => {
     setSyncing(true);
-    const cloud = await fetchDirectionalShootsCloud();
+    const cloud = await fetchDirectionalShootsCloud(true);
     if (cloud && cloud.length > 0) {
       setShoots(cloud.filter(s => s.status !== 'hidden'));
     }

@@ -275,36 +275,62 @@ export function isAdmin(): boolean {
   return getUser()?.role === 'admin';
 }
 
-// --- CLOUD SYNC HELPERS (Supabase) ---
-export async function fetchUsersCloud(): Promise<UserAccount[]> {
-  try {
-    const { data, error } = await supabase.from('snap_users').select('*');
-    if (error || !data || data.length === 0) {
-      return getUsersDB();
-    }
-    const local = getUsersDB();
-    // Merge cloud data with local records
-    const map = new Map<string, UserAccount>();
-    local.forEach(u => map.set(u.email.toLowerCase(), u));
-    data.forEach((u: any) => {
-      map.set(u.email.toLowerCase(), {
-        id: u.id,
-        email: u.email,
-        username: u.username || undefined,
-        password: u.password,
-        name: u.name,
-        role: u.role || 'user',
-        active: u.active ?? true,
-        created_at: u.created_at,
-        last_login_at: u.last_login_at || undefined
-      });
-    });
-    const merged = Array.from(map.values());
-    saveUsersDB(merged);
-    return merged;
-  } catch {
-    return getUsersDB();
+// --- CLOUD SYNC HELPERS (Supabase) WITH TTL CACHING ---
+let cachedUsers: { data: UserAccount[]; timestamp: number } | null = null;
+let inFlightUsersPromise: Promise<UserAccount[]> | null = null;
+const USERS_CACHE_TTL = 2.5 * 60 * 1000; // 2.5 minutes
+
+export function invalidateUsersCache(): void {
+  cachedUsers = null;
+}
+
+export async function fetchUsersCloud(forceRefresh = false): Promise<UserAccount[]> {
+  const now = Date.now();
+  if (!forceRefresh && cachedUsers && (now - cachedUsers.timestamp < USERS_CACHE_TTL)) {
+    return cachedUsers.data;
   }
+
+  if (inFlightUsersPromise) {
+    return inFlightUsersPromise;
+  }
+
+  inFlightUsersPromise = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from('snap_users')
+        .select('id, email, username, password, name, role, active, created_at, last_login_at');
+      if (error || !data || data.length === 0) {
+        return getUsersDB();
+      }
+      const local = getUsersDB();
+      // Merge cloud data with local records
+      const map = new Map<string, UserAccount>();
+      local.forEach(u => map.set(u.email.toLowerCase(), u));
+      data.forEach((u: any) => {
+        map.set(u.email.toLowerCase(), {
+          id: u.id,
+          email: u.email,
+          username: u.username || undefined,
+          password: u.password,
+          name: u.name,
+          role: u.role || 'user',
+          active: u.active ?? true,
+          created_at: u.created_at,
+          last_login_at: u.last_login_at || undefined
+        });
+      });
+      const merged = Array.from(map.values());
+      saveUsersDB(merged);
+      cachedUsers = { data: merged, timestamp: Date.now() };
+      return merged;
+    } catch {
+      return getUsersDB();
+    } finally {
+      inFlightUsersPromise = null;
+    }
+  })();
+
+  return inFlightUsersPromise;
 }
 
 export function syncLastLoginCloud(userId: string, timestamp: string): void {
@@ -318,6 +344,7 @@ export function syncLastLoginCloud(userId: string, timestamp: string): void {
 }
 
 export function upsertUserCloud(user: UserAccount): void {
+  invalidateUsersCache();
   try {
     supabase.from('snap_users').upsert([{
       id: user.id,
@@ -338,6 +365,7 @@ export function upsertUserCloud(user: UserAccount): void {
 }
 
 export function deleteUserCloud(userId: string): void {
+  invalidateUsersCache();
   try {
     supabase.from('snap_users').delete().eq('id', userId).then((res) => {
       if (res && res.error) console.warn('Supabase DB Sync (Users delete) notice:', res.error.message);

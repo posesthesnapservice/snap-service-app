@@ -53,6 +53,7 @@ export function createAssignment(payload: {
   const current = getAssignmentsDB();
   const updated = [newAssignment, ...current];
   saveAssignmentsDB(updated);
+  invalidateAssignmentsCache();
 
   // Sync to Supabase cloud (graceful if table does not exist)
   try {
@@ -116,6 +117,7 @@ export function respondToAssignment(
 
   current[index] = updatedAssignment;
   saveAssignmentsDB(current);
+  invalidateAssignmentsCache();
 
   // Update Supabase
   try {
@@ -132,48 +134,73 @@ export function respondToAssignment(
   return updatedAssignment;
 }
 
+// --- CLOUD SYNC HELPERS WITH TTL CACHING ---
+let cachedAssignments: { data: ShootAssignment[]; timestamp: number } | null = null;
+let inFlightAssignmentsPromise: Promise<ShootAssignment[]> | null = null;
+const ASSIGNMENTS_CACHE_TTL = 2.5 * 60 * 1000;
+
+export function invalidateAssignmentsCache(): void {
+  cachedAssignments = null;
+}
+
 /**
  * Cloud Fetcher for Assignments
  */
-export async function fetchAssignmentsCloud(): Promise<ShootAssignment[]> {
-  try {
-    const { data, error } = await supabase
-      .from('snap_assignments')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error || !data || data.length === 0) {
-      return getAssignmentsDB();
-    }
-
-    const local = getAssignmentsDB();
-    const map = new Map<string, ShootAssignment>();
-    data.forEach((d: any) => {
-      map.set(d.id, {
-        id: d.id,
-        title: d.title || 'Shoot Assignment',
-        assigned_by_name: d.assigned_by_name || 'Admin',
-        target_user_id: d.target_user_id,
-        target_user_name: d.target_user_name || 'User',
-        pose_ids: d.pose_ids || [],
-        event_name: d.event_name,
-        notes: d.notes,
-        status: d.status || 'pending',
-        created_at: d.created_at || new Date().toISOString(),
-      });
-    });
-
-    local.forEach(item => {
-      if (!map.has(item.id)) map.set(item.id, item);
-    });
-
-    const merged = Array.from(map.values()).sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-
-    saveAssignmentsDB(merged);
-    return merged;
-  } catch {
-    return getAssignmentsDB();
+export async function fetchAssignmentsCloud(forceRefresh = false): Promise<ShootAssignment[]> {
+  const now = Date.now();
+  if (!forceRefresh && cachedAssignments && (now - cachedAssignments.timestamp < ASSIGNMENTS_CACHE_TTL)) {
+    return cachedAssignments.data;
   }
+
+  if (inFlightAssignmentsPromise) {
+    return inFlightAssignmentsPromise;
+  }
+
+  inFlightAssignmentsPromise = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from('snap_assignments')
+        .select('id, title, assigned_by_name, target_user_id, target_user_name, pose_ids, event_name, notes, status, created_at')
+        .order('created_at', { ascending: false });
+
+      if (error || !data || data.length === 0) {
+        return getAssignmentsDB();
+      }
+
+      const local = getAssignmentsDB();
+      const map = new Map<string, ShootAssignment>();
+      data.forEach((d: any) => {
+        map.set(d.id, {
+          id: d.id,
+          title: d.title || 'Shoot Assignment',
+          assigned_by_name: d.assigned_by_name || 'Admin',
+          target_user_id: d.target_user_id,
+          target_user_name: d.target_user_name || 'User',
+          pose_ids: d.pose_ids || [],
+          event_name: d.event_name,
+          notes: d.notes,
+          status: d.status || 'pending',
+          created_at: d.created_at || new Date().toISOString(),
+        });
+      });
+
+      local.forEach(item => {
+        if (!map.has(item.id)) map.set(item.id, item);
+      });
+
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      saveAssignmentsDB(merged);
+      cachedAssignments = { data: merged, timestamp: Date.now() };
+      return merged;
+    } catch {
+      return getAssignmentsDB();
+    } finally {
+      inFlightAssignmentsPromise = null;
+    }
+  })();
+
+  return inFlightAssignmentsPromise;
 }
