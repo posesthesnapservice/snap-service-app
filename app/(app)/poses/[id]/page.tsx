@@ -4,6 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { getPosesDB } from '@/lib/poses-db-helpers';
 import { getTodayShootIds, toggleTodayShoot } from '@/lib/today-shoot-helpers';
+import { getSubjectColor, getEventColor } from '@/lib/constants';
 
 export default function PoseDetails({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -140,9 +141,23 @@ export default function PoseDetails({ params }: { params: Promise<{ id: string }
         <h1 style={{ fontSize: '1.8rem', margin: '0 0 10px 0', fontWeight: 'bold' }}>{pose.title}</h1>
         
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
-          {pose.events?.map((e: string) => <span key={e} style={{ ...tagStyle, background: '#4a2c00' }}>{e}</span>)}
-          {pose.subjects?.map((s: string) => <span key={s} style={{ ...tagStyle, background: '#002a4a' }}>{s}</span>)}
-          {pose.mood && <span style={{ ...tagStyle, background: '#2a4a00' }}>{pose.mood}</span>}
+          {pose.events?.map((e: string) => {
+            const col = getEventColor(e);
+            return (
+              <span key={e} style={{ ...tagStyle, background: col.bg, color: col.text, border: `1px solid ${col.border}` }}>
+                {e}
+              </span>
+            );
+          })}
+          {pose.subjects?.map((s: string) => {
+            const col = getSubjectColor(s);
+            return (
+              <span key={s} style={{ ...tagStyle, background: col.bg, color: col.text, border: `1px solid ${col.border}` }}>
+                {s}
+              </span>
+            );
+          })}
+          {pose.mood && <span style={{ ...tagStyle, background: 'rgba(212,175,55,0.15)', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.3)' }}>{pose.mood}</span>}
         </div>
 
         <section style={{ marginBottom: '20px' }}>

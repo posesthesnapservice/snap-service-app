@@ -7,6 +7,7 @@ import { getTodayShootIds, toggleTodayShoot } from '@/lib/today-shoot-helpers';
 import { getPosesDB, fetchPosesCloud } from '@/lib/poses-db-helpers';
 import { Pose } from '@/lib/types';
 import { getUser, canAccessPhotography } from '@/lib/auth-helpers';
+import { getSubjectColor, getEventColor } from '@/lib/constants';
 
 const SUBJECT_FILTERS = ['All', 'Bride', 'Groom', 'Couple', 'Sisters', 'Brothers', 'Old Age'];
 const EVENT_FILTERS = ['All', 'Mehndi', 'Nikah', 'Barat', 'Walima', 'Reception', 'Pre-Wedding'];
@@ -173,11 +174,31 @@ export default function PosesPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {/* Row 1: Subject Filters */}
         <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
-          {SUBJECT_FILTERS.map(f => (
-            <button key={f} onClick={() => setSubjectFilter(f)} style={{ ...pillStyle, background: subjectFilter === f ? 'linear-gradient(135deg, #D4AF37 0%, #B8960C 100%)' : '#12121a', color: subjectFilter === f ? '#000' : '#888', border: subjectFilter === f ? 'none' : '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-              {f}
-            </button>
-          ))}
+          {SUBJECT_FILTERS.map(f => {
+            const isSelected = subjectFilter === f;
+            const col = f !== 'All' ? getSubjectColor(f) : null;
+            return (
+              <button 
+                key={f} 
+                onClick={() => setSubjectFilter(f)} 
+                style={{ 
+                  ...pillStyle, 
+                  background: isSelected ? 'linear-gradient(135deg, #D4AF37 0%, #B8960C 100%)' : '#12121a', 
+                  color: isSelected ? '#000' : '#aaa', 
+                  border: isSelected ? 'none' : (col ? `1px solid ${col.border}` : '1px solid rgba(255,255,255,0.06)'), 
+                  flexShrink: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {col && (
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: isSelected ? '#000' : col.text }} />
+                )}
+                {f}
+              </button>
+            );
+          })}
         </div>
         {/* Row 2: Event Filters */}
         <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
@@ -410,12 +431,18 @@ export default function PosesPage() {
             {/* Card Content (Bottom overlay scrollable panel) */}
             <div style={{ padding: '12px', background: 'linear-gradient(to top, #0a0a0f 80%, rgba(10,10,15,0))', position: 'relative' }}>
               <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                {filtered[activeIndex].events?.slice(0, 2).map((e: string) => (
-                  <span key={e} style={{ ...tagStyle, background: 'rgba(212,175,55,0.15)', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.2)' }}>{e}</span>
-                ))}
-                {filtered[activeIndex].subjects?.slice(0, 2).map((s: string) => (
-                  <span key={s} style={{ ...tagStyle, background: 'rgba(255,255,255,0.06)', color: '#aaa', border: '1px solid rgba(255,255,255,0.08)' }}>{s}</span>
-                ))}
+                {filtered[activeIndex].events?.slice(0, 2).map((e: string) => {
+                  const col = getEventColor(e);
+                  return (
+                    <span key={e} style={{ ...tagStyle, background: col.bg, color: col.text, border: `1px solid ${col.border}` }}>{e}</span>
+                  );
+                })}
+                {filtered[activeIndex].subjects?.slice(0, 2).map((s: string) => {
+                  const col = getSubjectColor(s);
+                  return (
+                    <span key={s} style={{ ...tagStyle, background: col.bg, color: col.text, border: `1px solid ${col.border}` }}>{s}</span>
+                  );
+                })}
               </div>
               
               <h2 style={{ margin: '0 0 6px 0', fontSize: '0.95rem', color: 'white', fontWeight: 'bold' }}>{filtered[activeIndex].title}</h2>

@@ -9,8 +9,11 @@ import {
   fetchPosesCloud, 
   deletePoseDB, 
   deletePosesBulkDB, 
+  invalidateCloudCache,
   DEMO_POSE_IDS 
 } from '@/lib/poses-db-helpers';
+import { SUBJECTS, EVENTS, getSubjectColor, getEventColor } from '@/lib/constants';
+import { supabase } from '@/lib/supabase';
 
 // SVG Icons
 const PlusIcon = () => (
@@ -56,6 +59,97 @@ export default function AdminPoses() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'hidden'>('all');
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [selected, setSelected] = useState<string[]>([]);
+
+  // Bulk Edit States
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<'keep' | 'published' | 'hidden'>('keep');
+  const [bulkSubjectMode, setBulkSubjectMode] = useState<'keep' | 'add' | 'replace'>('keep');
+  const [bulkSubjects, setBulkSubjects] = useState<string[]>([]);
+  const [bulkEventMode, setBulkEventMode] = useState<'keep' | 'add' | 'replace'>('keep');
+  const [bulkEvents, setBulkEvents] = useState<string[]>([]);
+  const [bulkTags, setBulkTags] = useState('');
+  const [bulkSaving, setBulkSaving] = useState(false);
+
+  const toggleBulkSubject = (sub: string) => {
+    if (bulkSubjects.includes(sub)) {
+      setBulkSubjects(bulkSubjects.filter(s => s !== sub));
+    } else {
+      setBulkSubjects([...bulkSubjects, sub]);
+    }
+  };
+
+  const toggleBulkEvent = (ev: string) => {
+    if (bulkEvents.includes(ev)) {
+      setBulkEvents(bulkEvents.filter(e => e !== ev));
+    } else {
+      setBulkEvents([...bulkEvents, ev]);
+    }
+  };
+
+  const handleApplyBulkEdit = async () => {
+    if (selected.length === 0) return;
+    setBulkSaving(true);
+
+    const parsedTags = bulkTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+
+    const updated = poses.map(p => {
+      if (!selected.includes(p.id)) return p;
+      const nextPose = { ...p };
+
+      if (bulkStatus !== 'keep') {
+        nextPose.status = bulkStatus;
+      }
+
+      if (bulkSubjectMode === 'replace') {
+        nextPose.subjects = [...bulkSubjects];
+      } else if (bulkSubjectMode === 'add') {
+        nextPose.subjects = Array.from(new Set([...(p.subjects || []), ...bulkSubjects]));
+      }
+
+      if (bulkEventMode === 'replace') {
+        nextPose.events = [...bulkEvents];
+      } else if (bulkEventMode === 'add') {
+        nextPose.events = Array.from(new Set([...(p.events || []), ...bulkEvents]));
+      }
+
+      if (parsedTags.length > 0) {
+        nextPose.tags = Array.from(new Set([...(p.tags || []), ...parsedTags]));
+      }
+
+      nextPose.updated_at = new Date().toISOString();
+      return nextPose;
+    });
+
+    setPoses(updated);
+    savePosesDB(updated);
+    invalidateCloudCache('poses');
+
+    // Async sync to Supabase table
+    const modifiedList = updated.filter(p => selected.includes(p.id));
+    const payload = modifiedList.map(p => ({
+      id: p.id,
+      title: p.title,
+      image_url: p.image_url,
+      instructions: p.instructions || '',
+      subjects: p.subjects || [],
+      shoot_types: p.shoot_types || [],
+      events: p.events || [],
+      tags: p.tags || [],
+      status: p.status || 'published'
+    }));
+
+    try {
+      await supabase.from('snap_poses').upsert(payload, { onConflict: 'id' });
+    } catch (e) {
+      console.warn('Supabase bulk upsert notice:', e);
+    }
+
+    setBulkSaving(false);
+    setShowBulkModal(false);
+    const count = selected.length;
+    setSelected([]);
+    alert(`Successfully updated ${count} poses!`);
+  };
 
   const [syncing, setSyncing] = useState(false);
 
@@ -260,12 +354,31 @@ export default function AdminPoses() {
           </div>
 
           {selected.length > 0 && (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <button 
                 onClick={() => setSelected([])} 
                 style={{ ...styles.deleteBulkBtn, backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa' }}
               >
                 Clear Selection
+              </button>
+              <button 
+                onClick={() => {
+                  setBulkStatus('keep');
+                  setBulkSubjectMode('keep');
+                  setBulkSubjects([]);
+                  setBulkEventMode('keep');
+                  setBulkEvents([]);
+                  setBulkTags('');
+                  setShowBulkModal(true);
+                }} 
+                style={{ 
+                  ...styles.deleteBulkBtn, 
+                  backgroundColor: 'rgba(212, 175, 55, 0.15)', 
+                  color: '#D4AF37', 
+                  borderColor: 'rgba(212, 175, 55, 0.35)' 
+                }}
+              >
+                ✏️ Bulk Edit ({selected.length})
               </button>
               <button onClick={deleteSelected} style={styles.deleteBulkBtn}>
                 <TrashIcon /> Delete Selected ({selected.length})
@@ -341,16 +454,26 @@ export default function AdminPoses() {
                     </td>
                     <td style={styles.td}>
                       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {pose.subjects.map(s => (
-                          <span key={s} style={{ ...styles.badge, backgroundColor: 'rgba(59,130,246,0.08)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.15)' }}>{s}</span>
-                        ))}
+                        {pose.subjects.map(s => {
+                          const col = getSubjectColor(s);
+                          return (
+                            <span key={s} style={{ ...styles.badge, backgroundColor: col.bg, color: col.text, border: `1px solid ${col.border}` }}>
+                              {s}
+                            </span>
+                          );
+                        })}
                       </div>
                     </td>
                     <td style={styles.td}>
                       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {pose.events.map(e => (
-                          <span key={e} style={{ ...styles.badge, backgroundColor: 'rgba(124,58,237,0.08)', color: '#7c3aed', border: '1px solid rgba(124,58,237,0.15)' }}>{e}</span>
-                        ))}
+                        {pose.events.map(e => {
+                          const col = getEventColor(e);
+                          return (
+                            <span key={e} style={{ ...styles.badge, backgroundColor: col.bg, color: col.text, border: `1px solid ${col.border}` }}>
+                              {e}
+                            </span>
+                          );
+                        })}
                       </div>
                     </td>
                     <td style={styles.td}>
@@ -386,6 +509,302 @@ export default function AdminPoses() {
           </table>
         </div>
       </div>
+
+      {/* Bulk Edit Modal */}
+      {showBulkModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '16px'
+          }} 
+          onClick={() => !bulkSaving && setShowBulkModal(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: '#111118',
+              border: '1px solid rgba(212,175,55,0.3)',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '580px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.9), 0 0 50px rgba(212,175,55,0.08)',
+              display: 'flex',
+              flexDirection: 'column'
+            }} 
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '18px 20px',
+              borderBottom: '1px solid rgba(255,255,255,0.06)'
+            }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#fff' }}>
+                  ✏️ Bulk Edit Poses
+                </h2>
+                <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#D4AF37' }}>
+                  Applying changes to {selected.length} selected poses simultaneously
+                </p>
+              </div>
+              <button 
+                onClick={() => !bulkSaving && setShowBulkModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#aaa',
+                  fontSize: '18px',
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '20px' }}>
+              {/* 1. Status */}
+              <div>
+                <label style={{ fontSize: '11px', color: '#888', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px' }}>
+                  Status
+                </label>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {(['keep', 'published', 'hidden'] as const).map(st => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setBulkStatus(st)}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        border: bulkStatus === st ? '1px solid #D4AF37' : '1px solid rgba(255,255,255,0.1)',
+                        backgroundColor: bulkStatus === st ? 'rgba(212,175,55,0.15)' : '#0a0a0f',
+                        color: bulkStatus === st ? '#D4AF37' : '#aaa',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      {st === 'keep' ? '— Don’t Change —' : st.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Subjects */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '11px', color: '#888', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
+                    Subjects (Color Coded)
+                  </label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {(['keep', 'add', 'replace'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setBulkSubjectMode(mode)}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          border: bulkSubjectMode === mode ? '1px solid #D4AF37' : '1px solid rgba(255,255,255,0.08)',
+                          backgroundColor: bulkSubjectMode === mode ? 'rgba(212,175,55,0.2)' : 'transparent',
+                          color: bulkSubjectMode === mode ? '#D4AF37' : '#777',
+                        }}
+                      >
+                        {mode === 'keep' ? 'Don’t Change' : mode === 'add' ? '+ Add' : '⚡ Replace'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {bulkSubjectMode !== 'keep' && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', background: '#0a0a0f', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    {SUBJECTS.map(sub => {
+                      const isSelected = bulkSubjects.includes(sub);
+                      const col = getSubjectColor(sub);
+                      return (
+                        <button
+                          key={sub}
+                          type="button"
+                          onClick={() => toggleBulkSubject(sub)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '20px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: isSelected ? col.bg : 'rgba(255,255,255,0.03)',
+                            color: isSelected ? col.text : '#777',
+                            border: `1px solid ${isSelected ? col.border : 'rgba(255,255,255,0.08)'}`,
+                            transition: 'all 0.15s'
+                          }}
+                        >
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: col.text }} />
+                          {sub}
+                          {isSelected && ' ✓'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Events */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '11px', color: '#888', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
+                    Events (Color Coded)
+                  </label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {(['keep', 'add', 'replace'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setBulkEventMode(mode)}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          border: bulkEventMode === mode ? '1px solid #D4AF37' : '1px solid rgba(255,255,255,0.08)',
+                          backgroundColor: bulkEventMode === mode ? 'rgba(212,175,55,0.2)' : 'transparent',
+                          color: bulkEventMode === mode ? '#D4AF37' : '#777',
+                        }}
+                      >
+                        {mode === 'keep' ? 'Don’t Change' : mode === 'add' ? '+ Add' : '⚡ Replace'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {bulkEventMode !== 'keep' && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', background: '#0a0a0f', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    {EVENTS.map(ev => {
+                      const isSelected = bulkEvents.includes(ev);
+                      const col = getEventColor(ev);
+                      return (
+                        <button
+                          key={ev}
+                          type="button"
+                          onClick={() => toggleBulkEvent(ev)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '20px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: isSelected ? col.bg : 'rgba(255,255,255,0.03)',
+                            color: isSelected ? col.text : '#777',
+                            border: `1px solid ${isSelected ? col.border : 'rgba(255,255,255,0.08)'}`,
+                            transition: 'all 0.15s'
+                          }}
+                        >
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: col.text }} />
+                          {ev}
+                          {isSelected && ' ✓'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Tags */}
+              <div>
+                <label style={{ fontSize: '11px', color: '#888', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px' }}>
+                  Add Common Tags (Comma Separated, Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. golden hour, candid, creative"
+                  value={bulkTags}
+                  onChange={(e) => setBulkTags(e.target.value)}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#0a0a0f',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    color: '#fff',
+                    fontSize: '13px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '10px',
+              padding: '16px 20px',
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              backgroundColor: '#0d0d14'
+            }}>
+              <button
+                type="button"
+                onClick={() => setShowBulkModal(false)}
+                disabled={bulkSaving}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#aaa',
+                  padding: '10px 18px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyBulkEdit}
+                disabled={bulkSaving}
+                style={{
+                  backgroundColor: '#D4AF37',
+                  color: '#000',
+                  border: 'none',
+                  padding: '10px 22px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(212,175,55,0.25)'
+                }}
+              >
+                {bulkSaving ? 'Saving...' : `Apply to ${selected.length} Poses`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

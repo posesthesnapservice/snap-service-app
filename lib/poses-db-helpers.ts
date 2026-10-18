@@ -164,6 +164,33 @@ export function addPoseDB(newPose: Pose): Pose[] {
   return updated;
 }
 
+export function addPosesBulkDB(newPoses: Pose[]): Pose[] {
+  if (!newPoses || newPoses.length === 0) return getPosesDB();
+  invalidateCloudCache('poses');
+  const current = getPosesDB();
+  const newIds = new Set(newPoses.map(p => p.id));
+  const updated = [...newPoses, ...current.filter(p => !newIds.has(p.id))];
+  savePosesDB(updated);
+
+  const payload = newPoses.map(p => ({
+    id: p.id,
+    title: p.title,
+    image_url: p.image_url,
+    instructions: p.instructions || '',
+    subjects: p.subjects || [],
+    shoot_types: p.shoot_types || [],
+    events: p.events || [],
+    tags: p.tags || [],
+    status: p.status || 'published'
+  }));
+
+  supabase.from('snap_poses').upsert(payload, { onConflict: 'id' }).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Poses bulk insert) notice:', res.error.message);
+  });
+
+  return updated;
+}
+
 export function updatePoseDB(id: string, partial: Partial<Pose>): Pose[] {
   invalidateCloudCache('poses');
   const current = getPosesDB();
@@ -172,6 +199,22 @@ export function updatePoseDB(id: string, partial: Partial<Pose>): Pose[] {
 
   supabase.from('snap_poses').update(partial).eq('id', id).then((res) => {
     if (res && res.error) console.warn('Supabase DB Sync (Poses update) notice:', res.error.message);
+  });
+
+  return updated;
+}
+
+export function updatePosesBulkDB(ids: string[], partial: Partial<Pose>): Pose[] {
+  if (!ids || ids.length === 0) return getPosesDB();
+  invalidateCloudCache('poses');
+  const idSet = new Set(ids);
+  const current = getPosesDB();
+  const now = new Date().toISOString();
+  const updated = current.map(p => idSet.has(p.id) ? { ...p, ...partial, updated_at: now } : p);
+  savePosesDB(updated);
+
+  supabase.from('snap_poses').update(partial).in('id', ids).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Poses bulk update) notice:', res.error.message);
   });
 
   return updated;
