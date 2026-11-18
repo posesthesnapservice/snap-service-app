@@ -14,6 +14,7 @@ import {
   fetchTrendingReelsCloud,
   fetchDirectionalShootsCloud
 } from '@/lib/poses-db-helpers';
+import { getClientSelectionsDB } from '@/lib/client-selection-helpers';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -23,6 +24,7 @@ export default function AdminDashboard() {
     reels: 0,
     cinematic: 0,
     directional: 0,
+    clientLinks: 0,
     shotList: mockShotList.length,
     users: 3,
   });
@@ -38,6 +40,7 @@ export default function AdminDashboard() {
       reels: getTrendingReelsDB().length,
       cinematic: getCinematicDB().length,
       directional: getDirectionalShootsDB().length,
+      clientLinks: getClientSelectionsDB().length,
     }));
 
     fetchPosesCloud().then(p => { if (p) setCounts(c => ({ ...c, poses: p.length })); }).catch(() => {});
@@ -48,19 +51,19 @@ export default function AdminDashboard() {
   const stats = [
     { label: 'Total Poses', value: counts.poses, icon: '📷', path: '/admin/poses' },
     { label: 'Trending Reels', value: counts.reels, icon: '🔥', path: '/admin/trending-reels' },
+    { label: 'Client Links', value: counts.clientLinks, icon: '🔗', path: '/admin/client-selections' },
     { label: 'Directional Shoots', value: counts.directional, icon: '🧭', path: '/admin/directional-shoots' },
     { label: 'Cinematic Shots', value: counts.cinematic, icon: '🎬', path: '/admin/cinematic' },
     { label: 'Shot List Items', value: counts.shotList, icon: '✓', path: '/admin/shot-list' },
-    { label: 'Active Users', value: counts.users, icon: '👥', path: '/admin/users' },
   ];
 
   const quickActions = [
     { label: '🎯 Assign Today\'s Shoot', href: '/admin/assign-shoot', primary: true },
+    { label: '🔗 Client Selection Links', href: '/admin/client-selections', primary: false },
     { label: '+ Add New Pose', href: '/admin/poses/new', primary: false },
     { label: '+ Manage Directional Shoots', href: '/admin/directional-shoots', primary: false },
     { label: '+ Manage Trending Reels', href: '/admin/trending-reels', primary: false },
     { label: '+ Add Shot', href: '/admin/shot-list', primary: false },
-    { label: '+ Manage Users', href: '/admin/users', primary: false },
   ];
 
   const recentActivity = [

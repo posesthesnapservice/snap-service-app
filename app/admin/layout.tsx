@@ -42,6 +42,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: '⊞' },
     { name: 'Assign Shoot 🎯', path: '/admin/assign-shoot', icon: '🎯' },
+    { name: 'Client Links 🔗', path: '/admin/client-selections', icon: '🔗' },
     { name: 'Poses', path: '/admin/poses', icon: '📷' },
     { name: 'Categories & Tags', path: '/admin/categories', icon: '🏷️' },
     { name: 'Shot List', path: '/admin/shot-list', icon: '✓' },

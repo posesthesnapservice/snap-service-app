@@ -118,6 +118,23 @@ export interface DirectionalShoot {
   created_at: string;
 }
 
+export interface ClientSelectionSession {
+  id: string;
+  token: string;
+  client_name: string;
+  client_phone?: string;
+  event_type: string;
+  event_date?: string;
+  notes_for_client?: string;
+  client_notes?: string;
+  selected_pose_ids: string[];
+  selected_reel_ids: string[];
+  status: 'pending' | 'submitted' | 'expired';
+  expires_at?: string;
+  created_at: string;
+  submitted_at?: string;
+}
+
 export interface ChecklistEvent {
   id: string;
   name: string;
