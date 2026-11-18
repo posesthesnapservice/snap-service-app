@@ -1,7 +1,7 @@
 import { mockPoses, mockShotList, mockCinematicShots, mockTrendingReels, mockDirectionalShoots } from './mock-data';
 import { Pose, ShotListItem, CinematicShot, TrendingReel, DirectionalShoot } from './types';
 import { supabase } from './supabase';
-import { uploadMediaToCloudinary, deleteMediaFromCloudinary } from './cloudinary';
+import { uploadMediaToCloudinary, deleteMediaFromCloudinary, formatOptimizedVideoUrl, formatOptimizedCoverUrl } from './cloudinary';
 
 const POSES_KEY = 'snap_poses_db';
 const SHOTLIST_KEY = 'snap_shotlist_db';
@@ -11,21 +11,27 @@ const DIRECTIONAL_KEY = 'snap_directional_db';
 
 // --- MEDIA UPLOADER (Cloudinary 25GB -> Supabase Fallback) ---
 export async function uploadMediaToSupabase(file: File, folder = 'reels'): Promise<string | null> {
-  // 1. Try Cloudinary if configured (25GB Free Storage)
+  // 1. Try Cloudinary if configured (25GB Free Storage with universal H.264 auto-transcoding)
   const cloudinaryUrl = await uploadMediaToCloudinary(file);
-  if (cloudinaryUrl) return cloudinaryUrl;
+  if (cloudinaryUrl) return formatOptimizedVideoUrl(cloudinaryUrl);
 
-  // 2. Fallback to Supabase Storage
+  // 2. Fallback to Supabase Storage with correct MIME type
   try {
-    const fileExt = file.name.split('.').pop();
+    const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|qt|m4v|webm|avi|mkv|3gp|wmv)$/i.test(file.name);
+    const fileExt = file.name.split('.').pop() || (isVideo ? 'mp4' : 'jpg');
     const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const { error } = await supabase.storage.from('snap_media').upload(fileName, file);
+    const contentType = file.type || (isVideo ? 'video/mp4' : 'image/jpeg');
+
+    const { error } = await supabase.storage.from('snap_media').upload(fileName, file, {
+      contentType,
+      upsert: true
+    });
     if (error) {
       console.error('Supabase Storage error:', error);
       return null;
     }
     const { data: publicUrlData } = supabase.storage.from('snap_media').getPublicUrl(fileName);
-    return publicUrlData.publicUrl;
+    return isVideo ? formatOptimizedVideoUrl(publicUrlData.publicUrl) : publicUrlData.publicUrl;
   } catch (e) {
     console.error('Upload exception:', e);
     return null;
@@ -439,7 +445,18 @@ export function getTrendingReelsDB(): TrendingReel[] {
       const normalizedTitle = item.title.trim().toLowerCase();
       if (seenTitles.has(normalizedTitle)) continue;
       seenTitles.add(normalizedTitle);
-      cleaned.push(item);
+
+      // Clean & optimize video and cover URLs for 100% mobile & desktop compatibility
+      const safeVideo = (item.video_url && !item.video_url.startsWith('blob:'))
+        ? formatOptimizedVideoUrl(item.video_url)
+        : (mockTrendingReels[0]?.video_url || '');
+      const safeCover = formatOptimizedCoverUrl(safeVideo, item.cover_image);
+
+      cleaned.push({
+        ...item,
+        video_url: safeVideo,
+        cover_image: safeCover
+      });
     }
 
     if (cleaned.length !== parsed.length) {
@@ -463,7 +480,16 @@ export function saveTrendingReelsDB(items: TrendingReel[]): void {
 export function addTrendingReelDB(newItem: TrendingReel): TrendingReel[] {
   invalidateCloudCache('reels');
   const current = getTrendingReelsDB();
-  const updated = [newItem, ...current.filter(item => item.id !== newItem.id)];
+
+  const safeVideo = formatOptimizedVideoUrl(newItem.video_url);
+  const safeCover = formatOptimizedCoverUrl(safeVideo, newItem.cover_image);
+  const normalizedItem: TrendingReel = {
+    ...newItem,
+    video_url: safeVideo,
+    cover_image: safeCover
+  };
+
+  const updated = [normalizedItem, ...current.filter(item => item.id !== newItem.id)];
   saveTrendingReelsDB(updated);
 
   const eventsStr = Array.isArray(newItem.events) && newItem.events.length > 0 
@@ -472,12 +498,12 @@ export function addTrendingReelDB(newItem: TrendingReel): TrendingReel[] {
 
   // Async sync to Supabase Database table with upsert to prevent conflict
   supabase.from('snap_trending_reels').upsert([{
-    id: newItem.id,
-    title: newItem.title,
-    video_url: newItem.video_url || '',
-    cover_url: newItem.cover_image || '',
-    description: newItem.description || '',
-    orientation: newItem.orientation || 'portrait',
+    id: normalizedItem.id,
+    title: normalizedItem.title,
+    video_url: normalizedItem.video_url || '',
+    cover_url: normalizedItem.cover_image || '',
+    description: normalizedItem.description || '',
+    orientation: normalizedItem.orientation || 'portrait',
     event: eventsStr
   }], { onConflict: 'id' }).then((res) => {
     if (res && res.error) console.warn('Supabase DB Sync (Reels upsert) notice:', res.error.message);
@@ -489,10 +515,25 @@ export function addTrendingReelDB(newItem: TrendingReel): TrendingReel[] {
 export function updateTrendingReelDB(id: string, partial: Partial<TrendingReel>): TrendingReel[] {
   invalidateCloudCache('reels');
   const current = getTrendingReelsDB();
-  const updated = current.map(item => item.id === id ? { ...item, ...partial } : item);
+
+  const safePartial: Partial<TrendingReel> = { ...partial };
+  if (safePartial.video_url) {
+    safePartial.video_url = formatOptimizedVideoUrl(safePartial.video_url);
+    if (!safePartial.cover_image) {
+      safePartial.cover_image = formatOptimizedCoverUrl(safePartial.video_url);
+    }
+  }
+  if (safePartial.cover_image) {
+    safePartial.cover_image = formatOptimizedCoverUrl(safePartial.video_url, safePartial.cover_image);
+  }
+
+  const updated = current.map(item => item.id === id ? { ...item, ...safePartial } : item);
   saveTrendingReelsDB(updated);
 
-  const updatePayload: any = { ...partial };
+  const updatePayload: any = { ...safePartial };
+  if (safePartial.cover_image) {
+    updatePayload.cover_url = safePartial.cover_image;
+  }
   if (partial.events && Array.isArray(partial.events)) {
     updatePayload.event = partial.events.join(', ');
   }
@@ -565,12 +606,18 @@ export async function fetchTrendingReelsCloud(forceRefresh = false): Promise<Tre
         const eventsList = rawEvent.includes(',') 
           ? rawEvent.split(',').map((s: string) => s.trim()).filter(Boolean)
           : [rawEvent.trim()];
+        const rawVideo = d.video_url || '';
+        const safeVideo = (rawVideo && !rawVideo.startsWith('blob:'))
+          ? formatOptimizedVideoUrl(rawVideo)
+          : (mockTrendingReels[0]?.video_url || '');
+        const safeCover = formatOptimizedCoverUrl(safeVideo, d.cover_url || d.cover_image);
+
         return {
           id: d.id,
           title: d.title,
           description: d.description || '',
-          video_url: d.video_url,
-          cover_image: d.cover_url || d.cover_image,
+          video_url: safeVideo,
+          cover_image: safeCover,
           event: eventsList[0] || 'General',
           events: eventsList,
           orientation: d.orientation || 'portrait',

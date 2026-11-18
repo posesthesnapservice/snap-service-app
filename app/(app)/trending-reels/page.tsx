@@ -7,6 +7,7 @@ import { REEL_EVENTS } from '@/lib/constants';
 import { getTodayShootIds, toggleTodayShoot } from '@/lib/today-shoot-helpers';
 import { useRouter } from 'next/navigation';
 import { getUser, canAccessVideography } from '@/lib/auth-helpers';
+import { formatOptimizedVideoUrl, formatOptimizedCoverUrl } from '@/lib/cloudinary';
 
 export default function TrendingReelsPage() {
   const router = useRouter();
@@ -365,21 +366,38 @@ export default function TrendingReelsPage() {
               }}>
                 {reel.video_url ? (
                   <video 
-                    src={reel.video_url} 
+                    src={formatOptimizedVideoUrl(reel.video_url)} 
                     autoPlay 
                     muted 
                     loop 
                     playsInline 
-                    poster={reel.cover_image}
+                    preload="metadata"
+                    poster={formatOptimizedCoverUrl(reel.video_url, reel.cover_image)}
+                    ref={el => { if (el) { el.muted = true; el.defaultMuted = true; } }}
+                    onError={(e) => {
+                      // Fallback: If video codec or stream fails, show cover image so card is never black
+                      const target = e.currentTarget;
+                      target.style.display = 'none';
+                      const fallbackImg = target.parentElement?.querySelector('.reel-fallback-img') as HTMLElement;
+                      if (fallbackImg) fallbackImg.style.display = 'block';
+                    }}
                     style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                   />
-                ) : (
-                  <img 
-                    src={reel.cover_image || 'https://images.unsplash.com/photo-1519741347686-cfcbf6bde2af?w=800'} 
-                    alt={reel.title} 
-                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                )}
+                ) : null}
+                <img 
+                  className="reel-fallback-img"
+                  src={formatOptimizedCoverUrl(reel.video_url, reel.cover_image)} 
+                  alt={reel.title} 
+                  style={{ 
+                    position: 'absolute', 
+                    top: 0, 
+                    left: 0, 
+                    width: '100%', 
+                    height: '100%', 
+                    objectFit: 'cover',
+                    display: reel.video_url ? 'none' : 'block'
+                  }}
+                />
 
                 {/* Dark Gradient Overlay & Tap to Listen Icon */}
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.85 }}>
@@ -571,11 +589,13 @@ export default function TrendingReelsPage() {
               boxShadow: '0 20px 50px rgba(0,0,0,0.9)'
             }}>
               <video 
-                src={activeVideo.video_url || 'https://assets.mixkit.co/videos/preview/mixkit-bride-and-groom-walking-in-a-park-41221-large.mp4'} 
+                src={formatOptimizedVideoUrl(activeVideo.video_url) || 'https://assets.mixkit.co/videos/preview/mixkit-bride-and-groom-walking-in-a-park-41221-large.mp4'} 
                 controls 
                 autoPlay 
                 loop 
                 playsInline
+                preload="auto"
+                poster={formatOptimizedCoverUrl(activeVideo.video_url, activeVideo.cover_image)}
                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
               />
 

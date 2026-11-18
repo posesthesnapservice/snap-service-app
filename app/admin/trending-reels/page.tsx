@@ -13,7 +13,12 @@ import {
 } from '@/lib/poses-db-helpers';
 import { TrendingReel, PoseStatus } from '@/lib/types';
 import { REEL_EVENTS } from '@/lib/constants';
-import { lastCloudinaryError } from '@/lib/cloudinary';
+import { 
+  lastCloudinaryError, 
+  formatOptimizedVideoUrl, 
+  formatOptimizedCoverUrl, 
+  generateVideoThumbnailFromBlob 
+} from '@/lib/cloudinary';
 
 // Available Event Categories for Multi-Selection
 const AVAILABLE_EVENTS = [
@@ -256,7 +261,26 @@ export default function AdminTrendingReels() {
     setUploadingGlobal(true);
     setUploadProgressText(`Uploading ${files.length} video(s) to Cloud...`);
 
-    // Asynchronously upload each video file to Cloudinary / Supabase
+    // 1. Immediately capture on-device canvas video thumbnail so preview is never black while uploading
+    files.forEach((file, idx) => {
+      const targetQueueIdx = startIdx + idx;
+      generateVideoThumbnailFromBlob(file).then(thumb => {
+        if (thumb) {
+          setBatchQueue(prev => {
+            const copy = [...prev];
+            if (copy[targetQueueIdx] && !copy[targetQueueIdx].cover_image) {
+              copy[targetQueueIdx] = {
+                ...copy[targetQueueIdx],
+                cover_image: thumb
+              };
+            }
+            return copy;
+          });
+        }
+      });
+    });
+
+    // 2. Asynchronously upload each video file to Cloudinary (with universal H.264 auto-transcoding)
     let completedCount = 0;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -265,13 +289,22 @@ export default function AdminTrendingReels() {
         completedCount++;
         setUploadProgressText(`Uploaded ${completedCount} of ${files.length} video(s)...`);
 
+        const safeVideo = publicUrl ? formatOptimizedVideoUrl(publicUrl) : '';
+
         setBatchQueue(prev => {
           const copy = [...prev];
           if (copy[targetQueueIdx]) {
+            const existingCover = copy[targetQueueIdx].cover_image;
+            // Prefer Cloudinary 1.0s video snapshot poster, or existing local canvas snapshot
+            const safeCover = safeVideo 
+              ? formatOptimizedCoverUrl(safeVideo, existingCover)
+              : existingCover;
+
             copy[targetQueueIdx] = {
               ...copy[targetQueueIdx],
-              video_url: publicUrl || '',
-              uploadStatus: publicUrl ? 'done' : 'error'
+              video_url: safeVideo,
+              cover_image: safeCover,
+              uploadStatus: safeVideo ? 'done' : 'error'
             };
           }
           return copy;
@@ -279,7 +312,7 @@ export default function AdminTrendingReels() {
 
         if (completedCount === files.length) {
           setUploadingGlobal(false);
-          setUploadProgressText(`✓ All ${files.length} video(s) uploaded to Cloud!`);
+          setUploadProgressText(`✓ All ${files.length} video(s) ready in Cloud!`);
         }
       });
     }
@@ -313,16 +346,30 @@ export default function AdminTrendingReels() {
   const publishSpecificReel = (index: number) => {
     const item = batchQueue[index];
     if (!item) return;
+
+    if (item.uploadStatus === 'uploading') {
+      alert(`⚠️ Please wait! Video #${index + 1} is still uploading to the Cloud. Do not publish until upload completes, otherwise the video will remain black.`);
+      return;
+    }
+
+    if (!item.video_url || item.video_url.startsWith('blob:')) {
+      alert(`⚠️ Video #${index + 1} has not finished uploading to Cloud yet. Please wait a few moments.`);
+      return;
+    }
+
     if (!item.title.trim()) return alert(`Please enter a title for Reel #${index + 1}`);
 
     const tagList = item.tags.split(',').map(t => t.trim()).filter(Boolean);
     const chosenEvents = item.events.length > 0 ? item.events : ['General'];
+    const safeVideo = formatOptimizedVideoUrl(item.video_url.trim());
+    const safeCover = formatOptimizedCoverUrl(safeVideo, item.cover_image.trim());
+
     const newReel: TrendingReel = {
       id: `tr_${Date.now()}_${index}`,
       title: item.title.trim(),
       description: item.description.trim(),
-      video_url: item.video_url.trim() || item.localPreviewUrl || '',
-      cover_image: item.cover_image.trim() || 'https://images.unsplash.com/photo-1519741347686-cfcbf6bde2af?w=800',
+      video_url: safeVideo,
+      cover_image: safeCover,
       event: chosenEvents[0] || 'General',
       events: chosenEvents,
       orientation: item.orientation,
@@ -352,6 +399,12 @@ export default function AdminTrendingReels() {
       return;
     }
 
+    const stillUploading = remaining.some(x => x.item.uploadStatus === 'uploading' || !x.item.video_url || x.item.video_url.startsWith('blob:'));
+    if (stillUploading) {
+      alert('⚠️ Some videos are still uploading to the Cloud! Please wait until all videos finish uploading before publishing.');
+      return;
+    }
+
     let currentDB = getTrendingReelsDB();
     const timestamp = Date.now();
     const publishedIndices: number[] = [];
@@ -359,12 +412,15 @@ export default function AdminTrendingReels() {
     remaining.forEach(({ item, idx }) => {
       const tagList = item.tags.split(',').map(t => t.trim()).filter(Boolean);
       const chosenEvents = item.events.length > 0 ? item.events : ['General'];
+      const safeVideo = formatOptimizedVideoUrl(item.video_url.trim());
+      const safeCover = formatOptimizedCoverUrl(safeVideo, item.cover_image.trim());
+
       const newReel: TrendingReel = {
         id: `tr_${timestamp}_${idx}`,
         title: item.title.trim() || `Trending Reel ${idx + 1}`,
         description: item.description.trim(),
-        video_url: item.video_url.trim() || item.localPreviewUrl || '',
-        cover_image: item.cover_image.trim() || 'https://images.unsplash.com/photo-1519741347686-cfcbf6bde2af?w=800',
+        video_url: safeVideo,
+        cover_image: safeCover,
         event: chosenEvents[0] || 'General',
         events: chosenEvents,
         orientation: item.orientation,
@@ -398,11 +454,14 @@ export default function AdminTrendingReels() {
     const chosenEvents = form.events.length > 0 ? form.events : ['General'];
 
     if (editingId) {
+      const safeVideo = form.video_url.trim() ? formatOptimizedVideoUrl(form.video_url.trim()) : undefined;
+      const safeCover = formatOptimizedCoverUrl(safeVideo, form.cover_image.trim()) || undefined;
+
       const updated = updateTrendingReelDB(editingId, {
         title: form.title.trim(),
         description: form.description.trim(),
-        video_url: form.video_url.trim() || undefined,
-        cover_image: form.cover_image.trim() || undefined,
+        video_url: safeVideo,
+        cover_image: safeCover,
         event: chosenEvents[0] || 'General',
         events: chosenEvents,
         orientation: form.orientation,
@@ -412,12 +471,24 @@ export default function AdminTrendingReels() {
       setReels(updated);
       setShowModal(false);
     } else {
+      if (form.uploadStatus === 'uploading') {
+        alert('Please wait! Video is still uploading to Cloud.');
+        return;
+      }
+      const rawVideo = form.video_url.trim();
+      if (!rawVideo || rawVideo.startsWith('blob:')) {
+        alert('Please select and wait for a video to upload before saving.');
+        return;
+      }
+      const safeVideo = formatOptimizedVideoUrl(rawVideo);
+      const safeCover = formatOptimizedCoverUrl(safeVideo, form.cover_image.trim());
+
       const created: TrendingReel = {
         id: `tr_${Date.now()}`,
         title: form.title.trim(),
         description: form.description.trim(),
-        video_url: form.video_url.trim() || form.localPreviewUrl || 'https://assets.mixkit.co/videos/preview/mixkit-bride-and-groom-walking-in-a-park-41221-large.mp4',
-        cover_image: form.cover_image.trim() || 'https://images.unsplash.com/photo-1519741347686-cfcbf6bde2af?w=800',
+        video_url: safeVideo,
+        cover_image: safeCover,
         event: chosenEvents[0] || 'General',
         events: chosenEvents,
         orientation: form.orientation,
@@ -697,21 +768,37 @@ export default function AdminTrendingReels() {
 
                 {reel.video_url ? (
                   <video 
-                    src={reel.video_url} 
+                    src={formatOptimizedVideoUrl(reel.video_url)} 
                     autoPlay 
                     muted 
                     loop 
                     playsInline 
-                    poster={reel.cover_image}
+                    preload="metadata"
+                    poster={formatOptimizedCoverUrl(reel.video_url, reel.cover_image)}
+                    ref={el => { if (el) { el.muted = true; el.defaultMuted = true; } }}
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      target.style.display = 'none';
+                      const fallback = target.parentElement?.querySelector('.admin-reel-fallback') as HTMLElement;
+                      if (fallback) fallback.style.display = 'block';
+                    }}
                     style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                   />
-                ) : (
-                  <img 
-                    src={reel.cover_image || 'https://images.unsplash.com/photo-1519741347686-cfcbf6bde2af?w=800'} 
-                    alt={reel.title} 
-                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                )}
+                ) : null}
+                <img 
+                  className="admin-reel-fallback"
+                  src={formatOptimizedCoverUrl(reel.video_url, reel.cover_image)} 
+                  alt={reel.title} 
+                  style={{ 
+                    position: 'absolute', 
+                    top: 0, 
+                    left: 0, 
+                    width: '100%', 
+                    height: '100%', 
+                    objectFit: 'cover',
+                    display: reel.video_url ? 'none' : 'block'
+                  }} 
+                />
                 
                 {/* Event badges overlay */}
                 <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '70%' }}>
@@ -853,20 +940,22 @@ export default function AdminTrendingReels() {
                 {batchQueue.length > 1 && remainingCount > 0 && (
                   <button 
                     type="button" 
+                    disabled={uploadingGlobal}
                     onClick={publishAllRemainingBatch}
                     style={{ 
-                      background: '#D4AF37', 
+                      background: uploadingGlobal ? 'rgba(212,175,55,0.4)' : '#D4AF37', 
                       color: '#000', 
                       border: 'none', 
                       padding: '8px 18px', 
                       borderRadius: '8px', 
-                      cursor: 'pointer', 
+                      cursor: uploadingGlobal ? 'not-allowed' : 'pointer', 
                       fontWeight: 'bold', 
                       fontSize: '12px',
-                      boxShadow: '0 4px 15px rgba(212,175,55,0.3)'
+                      boxShadow: '0 4px 15px rgba(212,175,55,0.3)',
+                      opacity: uploadingGlobal ? 0.7 : 1
                     }}
                   >
-                    🚀 Publish All Remaining ({remainingCount})
+                    {uploadingGlobal ? `⏳ Uploading... (${remainingCount})` : `🚀 Publish All Remaining (${remainingCount})`}
                   </button>
                 )}
 
@@ -1016,20 +1105,22 @@ export default function AdminTrendingReels() {
                               <>
                                 <button
                                   type="button"
+                                  disabled={item.uploadStatus === 'uploading'}
                                   onClick={() => publishSpecificReel(idx)}
                                   style={{
-                                    background: '#D4AF37',
+                                    background: item.uploadStatus === 'uploading' ? 'rgba(212,175,55,0.4)' : '#D4AF37',
                                     color: '#000',
                                     border: 'none',
                                     borderRadius: '6px',
                                     padding: '6px 14px',
                                     fontSize: '12px',
                                     fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 2px 10px rgba(212,175,55,0.3)'
+                                    cursor: item.uploadStatus === 'uploading' ? 'not-allowed' : 'pointer',
+                                    boxShadow: '0 2px 10px rgba(212,175,55,0.3)',
+                                    opacity: item.uploadStatus === 'uploading' ? 0.7 : 1
                                   }}
                                 >
-                                  🚀 Publish Reel #{idx + 1}
+                                  {item.uploadStatus === 'uploading' ? '⏳ Uploading...' : `🚀 Publish Reel #${idx + 1}`}
                                 </button>
                                 <button
                                   type="button"
@@ -1077,12 +1168,14 @@ export default function AdminTrendingReels() {
                             }}>
                               {previewSrc ? (
                                 <video 
-                                  src={previewSrc} 
+                                  src={formatOptimizedVideoUrl(previewSrc)} 
                                   autoPlay 
                                   loop 
                                   muted={item.isMuted ?? true} 
                                   playsInline 
-                                  poster={item.cover_image}
+                                  preload="metadata"
+                                  poster={item.cover_image || formatOptimizedCoverUrl(previewSrc)}
+                                  ref={el => { if (el) { el.muted = true; el.defaultMuted = true; } }}
                                   style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
                               ) : (
@@ -1312,20 +1405,22 @@ export default function AdminTrendingReels() {
                               {!item.isPublished ? (
                                 <button
                                   type="button"
+                                  disabled={item.uploadStatus === 'uploading'}
                                   onClick={() => publishSpecificReel(idx)}
                                   style={{
-                                    background: '#D4AF37',
+                                    background: item.uploadStatus === 'uploading' ? 'rgba(212,175,55,0.4)' : '#D4AF37',
                                     color: '#000',
                                     border: 'none',
                                     padding: '9px 20px',
                                     borderRadius: '8px',
                                     fontWeight: 'bold',
                                     fontSize: '12px',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 3px 12px rgba(212,175,55,0.35)'
+                                    cursor: item.uploadStatus === 'uploading' ? 'not-allowed' : 'pointer',
+                                    boxShadow: '0 3px 12px rgba(212,175,55,0.35)',
+                                    opacity: item.uploadStatus === 'uploading' ? 0.7 : 1
                                   }}
                                 >
-                                  🚀 Save & Publish Reel #{idx + 1}
+                                  {item.uploadStatus === 'uploading' ? '⏳ Uploading to Cloud... Please Wait' : `🚀 Save & Publish Reel #${idx + 1}`}
                                 </button>
                               ) : (
                                 <button
@@ -1410,12 +1505,14 @@ export default function AdminTrendingReels() {
                       border: '2px solid rgba(212,175,55,0.4)' 
                     }}>
                       <video 
-                        src={form.localPreviewUrl || form.video_url} 
+                        src={formatOptimizedVideoUrl(form.localPreviewUrl || form.video_url)} 
                         autoPlay 
                         muted={form.isMuted ?? true} 
                         loop 
                         playsInline 
-                        poster={form.cover_image}
+                        preload="metadata"
+                        poster={formatOptimizedCoverUrl(form.video_url, form.cover_image)}
+                        ref={el => { if (el) { el.muted = true; el.defaultMuted = true; } }}
                         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                       <div style={{ position: 'absolute', bottom: 10, left: 10, right: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
