@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { SUBJECTS, EVENTS, SHOOT_TYPES, MOODS, getSubjectColor, getEventColor } from '@/lib/constants';
 import { addPoseDB, addPosesBulkDB, uploadMediaToSupabase } from '@/lib/poses-db-helpers';
 import { uploadMediaToCloudinary } from '@/lib/cloudinary';
+import { getCategoriesDB } from '@/lib/categories-db-helpers';
 import { Pose } from '@/lib/types';
 
 // SVG Icons
@@ -71,6 +72,30 @@ export default function NewPose() {
   const [bulkBaseTitle, setBulkBaseTitle] = useState('');
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0, text: '' });
+
+  // Dynamic Categories from Categories DB
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>(Array.from(SUBJECTS));
+  const [availableEvents, setAvailableEvents] = useState<string[]>(Array.from(EVENTS));
+  const [availableShootTypes, setAvailableShootTypes] = useState<string[]>(Array.from(SHOOT_TYPES));
+
+  useEffect(() => {
+    try {
+      const cats = getCategoriesDB();
+      const customSubs = cats.filter(c => c.type === 'subject').map(c => c.name);
+      const customEvents = cats.filter(c => c.type === 'event').map(c => c.name);
+      const customShoot = cats.filter(c => c.type === 'shoot_type').map(c => c.name);
+
+      if (customSubs.length > 0) {
+        setAvailableSubjects(Array.from(new Set([...SUBJECTS, ...customSubs])));
+      }
+      if (customEvents.length > 0) {
+        setAvailableEvents(Array.from(new Set([...EVENTS, ...customEvents])));
+      }
+      if (customShoot.length > 0) {
+        setAvailableShootTypes(Array.from(new Set([...SHOOT_TYPES, ...customShoot])));
+      }
+    } catch {}
+  }, []);
 
   const handleTagInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -441,7 +466,7 @@ export default function NewPose() {
               <span style={{ fontSize: '11px', color: '#888' }}>Select all that apply</span>
             </div>
             <div style={styles.chipGrid}>
-              {SUBJECTS.map(sub => {
+              {availableSubjects.map(sub => {
                 const isSelected = subjects.includes(sub);
                 const color = getSubjectColor(sub);
                 return (
@@ -472,7 +497,7 @@ export default function NewPose() {
               <span style={{ fontSize: '11px', color: '#888' }}>Select wedding events</span>
             </div>
             <div style={styles.chipGrid}>
-              {EVENTS.map(ev => {
+              {availableEvents.map(ev => {
                 const isSelected = events.includes(ev);
                 const color = getEventColor(ev);
                 return (
@@ -500,7 +525,7 @@ export default function NewPose() {
           <div>
             <label style={styles.fieldLabel}>Shoot Types (Framing & Posing Type)</label>
             <div style={styles.chipGrid}>
-              {SHOOT_TYPES.map(type => {
+              {availableShootTypes.map(type => {
                 const isSelected = shootTypes.includes(type);
                 return (
                   <button
@@ -768,7 +793,7 @@ export default function NewPose() {
               <span style={{ fontSize: '11px', color: '#888' }}>Will be assigned to all {bulkFiles.length || 0} poses</span>
             </div>
             <div style={styles.chipGrid}>
-              {SUBJECTS.map(sub => {
+              {availableSubjects.map(sub => {
                 const isSelected = subjects.includes(sub);
                 const color = getSubjectColor(sub);
                 return (
@@ -799,7 +824,7 @@ export default function NewPose() {
               <span style={{ fontSize: '11px', color: '#888' }}>Will be assigned to all {bulkFiles.length || 0} poses</span>
             </div>
             <div style={styles.chipGrid}>
-              {EVENTS.map(ev => {
+              {availableEvents.map(ev => {
                 const isSelected = events.includes(ev);
                 const color = getEventColor(ev);
                 return (
@@ -827,7 +852,7 @@ export default function NewPose() {
           <div>
             <label style={styles.fieldLabel}>Shoot Types (Optional)</label>
             <div style={styles.chipGrid}>
-              {SHOOT_TYPES.map(type => {
+              {availableShootTypes.map(type => {
                 const isSelected = shootTypes.includes(type);
                 return (
                   <button

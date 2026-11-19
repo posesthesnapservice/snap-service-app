@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { SUBJECTS, EVENTS, SHOOT_TYPES, MOODS, getSubjectColor, getEventColor } from '@/lib/constants';
 import { getPosesDB, updatePoseDB, uploadMediaToSupabase } from '@/lib/poses-db-helpers';
 import { uploadMediaToCloudinary } from '@/lib/cloudinary';
+import { getCategoriesDB } from '@/lib/categories-db-helpers';
 import { Pose } from '@/lib/types';
 
 // SVG Icons
@@ -57,7 +58,29 @@ export default function EditPose() {
   const [uploadProgressText, setUploadProgressText] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Dynamic Categories from Categories DB
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>(Array.from(SUBJECTS));
+  const [availableEvents, setAvailableEvents] = useState<string[]>(Array.from(EVENTS));
+  const [availableShootTypes, setAvailableShootTypes] = useState<string[]>(Array.from(SHOOT_TYPES));
+
   useEffect(() => {
+    try {
+      const cats = getCategoriesDB();
+      const customSubs = cats.filter(c => c.type === 'subject').map(c => c.name);
+      const customEvents = cats.filter(c => c.type === 'event').map(c => c.name);
+      const customShoot = cats.filter(c => c.type === 'shoot_type').map(c => c.name);
+
+      if (customSubs.length > 0) {
+        setAvailableSubjects(Array.from(new Set([...SUBJECTS, ...customSubs])));
+      }
+      if (customEvents.length > 0) {
+        setAvailableEvents(Array.from(new Set([...EVENTS, ...customEvents])));
+      }
+      if (customShoot.length > 0) {
+        setAvailableShootTypes(Array.from(new Set([...SHOOT_TYPES, ...customShoot])));
+      }
+    } catch {}
+
     if (!id) return;
     const all = getPosesDB();
     const existing = all.find(p => p.id === id);
@@ -308,7 +331,7 @@ export default function EditPose() {
               </span>
             </div>
             <div style={styles.chipsContainer}>
-              {SUBJECTS.map((sub) => {
+              {availableSubjects.map((sub) => {
                 const isSelected = subjects.includes(sub);
                 const col = getSubjectColor(sub);
                 return (
@@ -350,7 +373,7 @@ export default function EditPose() {
               </span>
             </div>
             <div style={styles.chipsContainer}>
-              {EVENTS.map((ev) => {
+              {availableEvents.map((ev) => {
                 const isSelected = events.includes(ev);
                 const col = getEventColor(ev);
                 return (
@@ -389,7 +412,7 @@ export default function EditPose() {
             
             <label style={{ ...styles.label, marginBottom: '6px' }}>Shoot Types</label>
             <div style={{ ...styles.chipsContainer, marginBottom: '16px' }}>
-              {SHOOT_TYPES.map((st) => {
+              {availableShootTypes.map((st) => {
                 const isSelected = shootTypes.includes(st);
                 return (
                   <button
