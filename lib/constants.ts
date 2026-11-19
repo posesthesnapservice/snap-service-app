@@ -5,7 +5,7 @@ export const SUBJECTS = ['Bride', 'Groom', 'Couple', 'Sisters', 'Brothers', 'Old
 export const SHOOT_TYPES = ['Solo', 'Couple', 'Portrait', 'Standing', 'Sitting', 'Walking', 'Romantic', 'Creative', 'Editorial', 'Traditional'] as const;
 
 // Events
-export const EVENTS = ['Mehndi', 'Nikah', 'Barat', 'Walima', 'Reception', 'Mayun', 'Dholki', 'Pre-Wedding', 'General'] as const;
+export const EVENTS = ['Mehndi', 'Nikah', 'Barat', 'Walima', 'Reception', 'Mayun', 'Dholki', 'Pre-Wedding', 'Engagement', 'General'] as const;
 
 // Trending Reel Event Categories
 export const REEL_EVENTS = ['All', 'Mehndi', 'Barat', 'Walima', 'Nikah', 'Mayun', 'Dholki', 'Pre-Wedding', 'Engagement', 'General'] as const;
@@ -48,6 +48,7 @@ export const EVENT_COLORS: Record<string, { bg: string; text: string; border: st
   'Mayun': { bg: 'rgba(249, 115, 22, 0.18)', text: '#fb923c', border: 'rgba(249, 115, 22, 0.5)' },
   'Dholki': { bg: 'rgba(236, 72, 153, 0.18)', text: '#f472b6', border: 'rgba(236, 72, 153, 0.5)' },
   'Pre-Wedding': { bg: 'rgba(168, 85, 247, 0.18)', text: '#c084fc', border: 'rgba(168, 85, 247, 0.5)' },
+  'Engagement': { bg: 'rgba(236, 72, 153, 0.18)', text: '#f472b6', border: 'rgba(236, 72, 153, 0.5)' },
   'Reception': { bg: 'rgba(14, 165, 233, 0.18)', text: '#38bdf8', border: 'rgba(14, 165, 233, 0.5)' },
   'General': { bg: 'rgba(148, 163, 184, 0.15)', text: '#cbd5e1', border: 'rgba(148, 163, 184, 0.4)' },
 };

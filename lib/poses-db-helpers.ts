@@ -126,7 +126,8 @@ export function getPosesDB(): Pose[] {
       return initial;
     }
     const parsed: Pose[] = JSON.parse(stored);
-    const cleaned = parsed.filter(p => !deletedIds.has(p.id));
+    // User created custom poses (p_...) are protected and cannot be deleted by demo filters
+    const cleaned = parsed.filter(p => !deletedIds.has(p.id) || p.id.startsWith('p_'));
     if (cleaned.length !== parsed.length) {
       localStorage.setItem(POSES_KEY, JSON.stringify(cleaned));
     }
@@ -683,16 +684,16 @@ export async function fetchPosesCloud(forceRefresh = false): Promise<Pose[]> {
 
       const deletedIds = getDeletedPoseIds();
       const mapped: Pose[] = data
-        .filter((d: any) => !deletedIds.has(d.id))
+        .filter((d: any) => !deletedIds.has(d.id) || (d.id && String(d.id).startsWith('p_')))
         .map((d: any) => ({
           id: d.id,
           title: d.title,
           image_url: d.image_url,
           instructions: d.instructions || '',
-          subjects: d.subjects || [],
-          shoot_types: d.shoot_types || [],
-          events: d.events || [],
-          tags: d.tags || [],
+          subjects: Array.isArray(d.subjects) ? d.subjects : (typeof d.subjects === 'string' ? [d.subjects] : []),
+          shoot_types: Array.isArray(d.shoot_types) ? d.shoot_types : [],
+          events: Array.isArray(d.events) ? d.events : (typeof d.events === 'string' ? [d.events] : []),
+          tags: Array.isArray(d.tags) ? d.tags : [],
           status: d.status || 'published',
           created_at: d.created_at || new Date().toISOString(),
           updated_at: d.created_at || new Date().toISOString()
@@ -703,7 +704,7 @@ export async function fetchPosesCloud(forceRefresh = false): Promise<Pose[]> {
       const map = new Map<string, Pose>();
       // Populate local poses first
       local.forEach(p => {
-        if (!deletedIds.has(p.id)) {
+        if (!deletedIds.has(p.id) || p.id.startsWith('p_')) {
           map.set(p.id, p);
         }
       });
@@ -719,26 +720,32 @@ export async function fetchPosesCloud(forceRefresh = false): Promise<Pose[]> {
   }, forceRefresh);
 }
 
-export async function syncLocalPosesToCloud(): Promise<number> {
-  if (typeof window === 'undefined') return 0;
+export interface CloudSyncResult {
+  success: boolean;
+  count: number;
+  error?: string;
+}
+
+export async function syncLocalPosesToCloud(): Promise<CloudSyncResult> {
+  if (typeof window === 'undefined') return { success: false, count: 0, error: 'Window undefined' };
   try {
     const local = getPosesDB();
-    if (!local || local.length === 0) return 0;
+    if (!local || local.length === 0) return { success: true, count: 0 };
     const deletedIds = getDeletedPoseIds();
-    const toSync = local.filter(p => !deletedIds.has(p.id) && !p.id.startsWith('mock_'));
-    if (toSync.length === 0) return 0;
+    const toSync = local.filter(p => !deletedIds.has(p.id) && !/^p[0-9]+$/.test(p.id));
+    if (toSync.length === 0) return { success: true, count: 0 };
 
     const payload = toSync.map(toSupabasePosePayload);
     const { error } = await supabase.from('snap_poses').upsert(payload, { onConflict: 'id' });
     if (error) {
       console.warn('Sync local poses to cloud notice:', error.message);
-      return 0;
+      return { success: false, count: 0, error: error.message };
     }
     invalidateCloudCache('poses');
-    return payload.length;
-  } catch (e) {
+    return { success: true, count: payload.length };
+  } catch (e: any) {
     console.error('Failed to sync poses to cloud:', e);
-    return 0;
+    return { success: false, count: 0, error: e?.message || 'Network error' };
   }
 }
 

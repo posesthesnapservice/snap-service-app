@@ -130,6 +130,8 @@ export interface ClientSelectionSession {
   content_mode?: 'both' | 'reels_only' | 'poses_only';
   selected_pose_ids: string[];
   selected_reel_ids: string[];
+  poses_snapshot?: Pose[];
+  reels_snapshot?: TrendingReel[];
   status: 'pending' | 'submitted' | 'expired';
   expires_at?: string;
   created_at: string;

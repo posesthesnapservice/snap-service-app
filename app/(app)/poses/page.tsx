@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getTodayShootIds, toggleTodayShoot } from '@/lib/today-shoot-helpers';
-import { getPosesDB, fetchPosesCloud, subscribeToPosesChanges, invalidateCloudCache } from '@/lib/poses-db-helpers';
+import { getPosesDB, savePosesDB, fetchPosesCloud, subscribeToPosesChanges, invalidateCloudCache } from '@/lib/poses-db-helpers';
 import { Pose } from '@/lib/types';
 import { getUser, canAccessPhotography } from '@/lib/auth-helpers';
 import { getSubjectColor, getEventColor } from '@/lib/constants';
@@ -52,6 +52,28 @@ export default function PosesPage() {
     if (typeof window !== 'undefined') {
       const q = new URLSearchParams(window.location.search).get('search');
       if (q) setSearch(q);
+
+      // 1-Click Mobile Import from desktop share link
+      const importPayload = new URLSearchParams(window.location.search).get('import_poses');
+      if (importPayload) {
+        try {
+          const jsonStr = decodeURIComponent(atob(importPayload.replace(/-/g, '+').replace(/_/g, '/')));
+          const importedPoses: Pose[] = JSON.parse(jsonStr);
+          if (Array.isArray(importedPoses) && importedPoses.length > 0) {
+            const current = getPosesDB();
+            const map = new Map<string, Pose>();
+            current.forEach(p => map.set(p.id, p));
+            importedPoses.forEach(p => map.set(p.id, p));
+            const merged = Array.from(map.values());
+            savePosesDB(merged, false);
+            setPosesList(merged);
+            alert(`✓ Successfully loaded ${importedPoses.length} studio poses onto your mobile!`);
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+        } catch (err) {
+          console.error('Failed to import poses from URL:', err);
+        }
+      }
     }
 
     const u = getUser();

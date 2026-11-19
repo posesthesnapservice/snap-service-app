@@ -11,7 +11,7 @@ import {
   saveClientSelectionsDB,
   getClientSelectionsDB
 } from '@/lib/client-selection-helpers';
-import { getPosesDB, fetchPosesCloud, getTrendingReelsDB, fetchTrendingReelsCloud, subscribeToPosesChanges } from '@/lib/poses-db-helpers';
+import { getPosesDB, savePosesDB, fetchPosesCloud, getTrendingReelsDB, fetchTrendingReelsCloud, subscribeToPosesChanges } from '@/lib/poses-db-helpers';
 import { mockPoses, mockTrendingReels } from '@/lib/mock-data';
 import { formatOptimizedVideoUrl, formatOptimizedCoverUrl } from '@/lib/cloudinary';
 import { Pose, TrendingReel, ClientSelectionSession } from '@/lib/types';
@@ -95,6 +95,15 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
         }
         if (s.client_notes) setClientNotes(s.client_notes);
         if (s.status === 'submitted') setSubmittedSuccess(true);
+
+        // Instant cross-device hydration: if session link carried studio poses, display them immediately!
+        if (s.poses_snapshot && s.poses_snapshot.length > 0) {
+          const snapshot = s.poses_snapshot.filter(item => item.status !== 'hidden');
+          if (snapshot.length > 0) {
+            setPoses(snapshot);
+            savePosesDB(snapshot, false);
+          }
+        }
         // Default event filter to 'All' so client sees full wedding library
       }
 
@@ -103,7 +112,7 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
       if (localPoses.length === 0) {
         localPoses = mockPoses.filter(p => p.status !== 'hidden');
       }
-      setPoses(localPoses);
+      setPoses(prev => prev.length > 0 ? prev : localPoses);
 
       fetchPosesCloud(true).then(p => {
         if (p && p.length > 0) {
@@ -198,6 +207,30 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
     setIsSubmitting(false);
   };
 
+  // Dynamic Event Filters (Standard + Session Event + Loaded Poses & Reels + Custom Categories)
+  const dynamicEventFilters = React.useMemo(() => {
+    const list: string[] = ['All'];
+    if (session?.event_type && session.event_type !== 'All') {
+      list.push(session.event_type);
+    }
+    const standard = ['Mehndi', 'Nikah', 'Barat', 'Walima', 'Reception', 'Mayun', 'Dholki', 'Pre-Wedding', 'Engagement', 'General'];
+    standard.forEach(ev => {
+      if (!list.some(x => x.toLowerCase() === ev.toLowerCase())) {
+        list.push(ev);
+      }
+    });
+    // Add any unique events from poses
+    poses.forEach(p => {
+      const pEvents = Array.isArray(p.events) ? p.events : typeof p.events === 'string' ? [p.events] : [];
+      pEvents.forEach(e => {
+        if (e && !list.some(x => x.toLowerCase() === e.toLowerCase())) {
+          list.push(e);
+        }
+      });
+    });
+    return list;
+  }, [session?.event_type, poses]);
+
   // Filtered poses
   const filteredPoses = poses.filter(p => {
     if (search) {
@@ -208,11 +241,13 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
       if (!matchTitle && !matchInst && !matchTags) return false;
     }
     if (subjectFilter !== 'All') {
-      const poseSubjects = (p.subjects || []).map(s => s.toLowerCase());
+      const rawSubjects = Array.isArray(p.subjects) ? p.subjects : typeof p.subjects === 'string' ? [p.subjects] : [];
+      const poseSubjects = rawSubjects.map(s => String(s).toLowerCase());
       if (!poseSubjects.includes(subjectFilter.toLowerCase())) return false;
     }
     if (eventFilter !== 'All') {
-      const poseEvents = (p.events || []).map(e => e.toLowerCase());
+      const rawEvents = Array.isArray(p.events) ? p.events : typeof p.events === 'string' ? [p.events] : [];
+      const poseEvents = rawEvents.map(e => String(e).toLowerCase());
       const filterLower = eventFilter.toLowerCase();
       const matchesEvent = poseEvents.includes(filterLower) || 
                            poseEvents.includes('all') || 
@@ -551,7 +586,7 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
 
           {/* Event Filter Pills */}
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
-            {EVENT_FILTERS.map(ev => {
+            {dynamicEventFilters.map(ev => {
               const isSelected = eventFilter === ev;
               const isClientEvent = !!session?.event_type && ev.toLowerCase() === session.event_type.toLowerCase() && ev !== 'All';
               return (
@@ -576,6 +611,45 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
               );
             })}
           </div>
+
+          {/* Event Helper Banner when filtered */}
+          {eventFilter !== 'All' && poses.length > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: 'rgba(212,175,55,0.08)',
+              border: '1px solid rgba(212,175,55,0.2)',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              marginTop: '10px',
+              fontSize: '12px',
+              color: '#D4AF37',
+              flexWrap: 'wrap',
+              gap: '6px'
+            }}>
+              <span>
+                Filtering by <strong>{eventFilter}</strong> ({filteredPoses.length} pose{filteredPoses.length === 1 ? '' : 's'}). 
+                Studio has <strong>{poses.length} total wedding poses</strong> available.
+              </span>
+              <button
+                type="button"
+                onClick={() => setEventFilter('All')}
+                style={{
+                  backgroundColor: '#D4AF37',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '4px 10px',
+                  fontWeight: 'bold',
+                  fontSize: '11px',
+                  cursor: 'pointer'
+                }}
+              >
+                View All ({poses.length}) →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* TAB 1: POSES GRID */}

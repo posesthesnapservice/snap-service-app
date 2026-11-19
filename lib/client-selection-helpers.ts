@@ -1,5 +1,6 @@
-import { ClientSelectionSession } from './types';
+import { ClientSelectionSession, Pose } from './types';
 import { supabase } from './supabase';
+import { getPosesDB, savePosesDB } from './poses-db-helpers';
 
 const SELECTIONS_KEY = 'snap_client_selections_db';
 
@@ -41,9 +42,26 @@ export function fromUrlSafeBase64(b64: string): string {
   }
 }
 
-export function encodeSessionPayload(session: ClientSelectionSession): string {
+export function encodeSessionPayload(session: ClientSelectionSession, customPoses?: Pose[]): string {
   try {
-    const compact = {
+    let posesList = customPoses || session.poses_snapshot;
+    if (!posesList && typeof window !== 'undefined') {
+      try {
+        posesList = getPosesDB().filter(p => p.status !== 'hidden');
+      } catch {}
+    }
+
+    // Include custom studio poses (lightweight fields to keep URL compact and 100% cross-device ready)
+    const compactPoses = (posesList || []).slice(0, 60).map(p => ({
+      i: p.id,
+      t: p.title,
+      u: p.image_url,
+      s: p.subjects || [],
+      e: p.events || [],
+      st: p.status || 'published'
+    }));
+
+    const compact: any = {
       i: session.id,
       t: session.token,
       n: session.client_name,
@@ -55,6 +73,11 @@ export function encodeSessionPayload(session: ClientSelectionSession): string {
       x: session.expires_at || '',
       c: session.created_at,
     };
+
+    if (compactPoses.length > 0) {
+      compact.ps = compactPoses;
+    }
+
     return toUrlSafeBase64(JSON.stringify(compact));
   } catch {
     return '';
@@ -78,6 +101,22 @@ export function decodeSessionPayload(encoded: string): ClientSelectionSession | 
       }
     }
 
+    const posesSnapshot: Pose[] | undefined = Array.isArray(c.ps)
+      ? c.ps.map((p: any) => ({
+          id: p.i,
+          title: p.t,
+          image_url: p.u,
+          instructions: '',
+          subjects: Array.isArray(p.s) ? p.s : [],
+          shoot_types: [],
+          events: Array.isArray(p.e) ? p.e : [],
+          tags: [],
+          status: p.st || 'published',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }))
+      : undefined;
+
     return {
       id: c.i || `cs_${timestamp}`,
       token: c.t,
@@ -89,6 +128,7 @@ export function decodeSessionPayload(encoded: string): ClientSelectionSession | 
       content_mode: c.cm || 'both',
       selected_pose_ids: [],
       selected_reel_ids: [],
+      poses_snapshot: posesSnapshot,
       status,
       expires_at: c.x || undefined,
       created_at: c.c || new Date(timestamp).toISOString(),

@@ -21,6 +21,7 @@ export const defaultCategories: Category[] = [
   { id: '7b', name: 'Mayun', type: 'event', created_at: '2026-01-01T00:00:00.000Z' },
   { id: '7c', name: 'Dholki', type: 'event', created_at: '2026-01-01T00:00:00.000Z' },
   { id: '7d', name: 'Pre-Wedding', type: 'event', created_at: '2026-01-01T00:00:00.000Z' },
+  { id: '7e', name: 'Engagement', type: 'event', created_at: '2026-01-01T00:00:00.000Z' },
   { id: '8', name: 'Portraits', type: 'shoot_type', created_at: '2026-01-01T00:00:00.000Z' },
   { id: '9', name: 'Candid', type: 'shoot_type', created_at: '2026-01-01T00:00:00.000Z' },
   { id: '9a', name: 'Solo', type: 'shoot_type', created_at: '2026-01-01T00:00:00.000Z' },
@@ -57,6 +58,14 @@ export function getCategoriesDB(): Category[] {
     if (!Array.isArray(parsed) || parsed.length === 0) {
       localStorage.setItem(CATEGORIES_KEY, JSON.stringify(defaultCategories));
       return defaultCategories;
+    }
+    // Seamlessly merge essential default categories if missing (e.g. Engagement)
+    const existingNames = new Set(parsed.map(c => `${c.name.toLowerCase()}_${c.type}`));
+    const missingDefaults = defaultCategories.filter(d => !existingNames.has(`${d.name.toLowerCase()}_${d.type}`));
+    if (missingDefaults.length > 0) {
+      const merged = [...parsed, ...missingDefaults];
+      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(merged));
+      return merged;
     }
     return parsed;
   } catch {

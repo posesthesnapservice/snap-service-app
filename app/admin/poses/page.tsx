@@ -12,6 +12,7 @@ import {
   invalidateCloudCache,
   syncLocalPosesToCloud,
   subscribeToPosesChanges,
+  CloudSyncResult,
   DEMO_POSE_IDS 
 } from '@/lib/poses-db-helpers';
 import { SUBJECTS, EVENTS, getSubjectColor, getEventColor } from '@/lib/constants';
@@ -154,11 +155,16 @@ export default function AdminPoses() {
   };
 
   const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<CloudSyncResult | null>(null);
+  const [showSqlHelp, setShowSqlHelp] = useState(false);
+  const [showMobileModal, setShowMobileModal] = useState(false);
+  const [copiedMobileLink, setCopiedMobileLink] = useState(false);
 
   const handleManualSync = async () => {
     setSyncing(true);
     invalidateCloudCache('poses');
-    await syncLocalPosesToCloud();
+    const res = await syncLocalPosesToCloud();
+    setSyncResult(res);
     const cloudPoses = await fetchPosesCloud(true);
     if (cloudPoses) {
       setPoses(cloudPoses);
@@ -170,9 +176,10 @@ export default function AdminPoses() {
     setPoses(getPosesDB());
     
     // Auto-sync any unsynced local poses up to Supabase cloud
-    syncLocalPosesToCloud().then(count => {
-      if (count > 0) {
-        console.log(`Synced ${count} local poses to Supabase.`);
+    syncLocalPosesToCloud().then(res => {
+      setSyncResult(res);
+      if (res.success && res.count > 0) {
+        console.log(`Synced ${res.count} local poses to Supabase.`);
       }
     });
 
@@ -232,9 +239,10 @@ export default function AdminPoses() {
     }
   };
 
-  const hasDemoPoses = poses.some(p => DEMO_POSE_IDS.has(p.id) || p.id.startsWith('p'));
+  const isDemoPose = (id: string) => DEMO_POSE_IDS.has(id) || /^p[0-9]+$/.test(id);
+  const hasDemoPoses = poses.some(p => isDemoPose(p.id));
   const deleteAllDemoPoses = () => {
-    const demoIds = poses.filter(p => DEMO_POSE_IDS.has(p.id) || p.id.startsWith('p')).map(p => p.id);
+    const demoIds = poses.filter(p => isDemoPose(p.id)).map(p => p.id);
     if (demoIds.length === 0) {
       alert('No demo poses found to delete!');
       return;
@@ -275,6 +283,31 @@ export default function AdminPoses() {
     savePosesDB(updated);
   };
 
+  // 1-Click Mobile Sync URL generator
+  const getMobileSyncUrl = () => {
+    if (typeof window === 'undefined') return '';
+    try {
+      const payload = JSON.stringify(poses.map(p => ({
+        id: p.id,
+        title: p.title,
+        image_url: p.image_url,
+        subjects: p.subjects || [],
+        events: p.events || [],
+        instructions: p.instructions || '',
+        status: p.status || 'published'
+      })));
+      const bytes = encodeURIComponent(payload).replace(/%([0-9A-F]{2})/g, (_, p1) => 
+        String.fromCharCode(parseInt(p1, 16))
+      );
+      const b64 = btoa(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      return `${window.location.origin}/poses?import_poses=${b64}`;
+    } catch {
+      return '';
+    }
+  };
+
+  const mobileSyncUrl = getMobileSyncUrl();
+
   return (
     <div style={styles.page}>
       {/* Header */}
@@ -303,6 +336,28 @@ export default function AdminPoses() {
           >
             🔄 {syncing ? 'Syncing...' : 'Sync Cloud'}
           </button>
+
+          {/* 1-Click Mobile Sync Tool */}
+          <button
+            onClick={() => setShowMobileModal(true)}
+            style={{
+              backgroundColor: 'rgba(59,130,246,0.15)',
+              color: '#60a5fa',
+              border: '1px solid rgba(59,130,246,0.35)',
+              padding: '10px 14px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+            title="Send all studio poses to your phone via WhatsApp in 1 click"
+          >
+            📱 Sync to Mobile ({poses.length})
+          </button>
+
           {hasDemoPoses && (
             <button 
               onClick={deleteAllDemoPoses}
@@ -333,6 +388,50 @@ export default function AdminPoses() {
           </Link>
         </div>
       </div>
+
+      {/* Cloud Sync Status Banner */}
+      {syncResult && (
+        <div style={{
+          margin: '0 0 16px 0',
+          padding: '10px 16px',
+          borderRadius: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '10px',
+          fontSize: '12px',
+          backgroundColor: syncResult.success ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.12)',
+          border: syncResult.success ? '1px solid rgba(16,185,129,0.25)' : '1px solid rgba(239,68,68,0.3)',
+          color: syncResult.success ? '#34d399' : '#fca5a5'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>{syncResult.success ? '☁️' : '⚠️'}</span>
+            <span>
+              {syncResult.success 
+                ? (syncResult.count > 0 ? `Cloud Live: ${syncResult.count} studio poses synchronized with Supabase cloud.` : 'Cloud Live: All poses are up to date.')
+                : `Supabase Sync Alert: ${syncResult.error || 'Network error'}. Poses are safely stored locally.`}
+            </span>
+          </div>
+          {!syncResult.success && (
+            <button
+              onClick={() => setShowSqlHelp(true)}
+              style={{
+                backgroundColor: '#dc2626',
+                color: '#fff',
+                border: 'none',
+                padding: '5px 12px',
+                borderRadius: '6px',
+                fontWeight: 'bold',
+                fontSize: '11px',
+                cursor: 'pointer'
+              }}
+            >
+              🛠️ View 15-Sec SQL Fix
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Control Panel (Filters & Search) */}
       <div style={styles.controlPanel}>
@@ -823,6 +922,219 @@ export default function AdminPoses() {
               >
                 {bulkSaving ? 'Saving...' : `Apply to ${selected.length} Poses`}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 1-Click Mobile Sync Modal */}
+      {showMobileModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#12121a',
+            border: '1px solid rgba(212,175,55,0.3)',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '520px',
+            overflow: 'hidden',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.7)'
+          }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '24px' }}>📱</span>
+                <div>
+                  <h3 style={{ fontSize: '16px', color: '#fff', margin: 0, fontWeight: '700' }}>Instant Mobile Sync</h3>
+                  <p style={{ fontSize: '12px', color: '#aaa', margin: '2px 0 0 0' }}>Sync all {poses.length} poses to your phone storage</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowMobileModal(false)}
+                style={{ background: 'none', border: 'none', color: '#aaa', fontSize: '20px', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: '24px' }}>
+              <p style={{ fontSize: '13px', color: '#ccc', lineHeight: '1.6', margin: '0 0 16px 0' }}>
+                Apne phone par poses load karne ke liye yeh link WhatsApp par apne number par share karein ya copy karein. Phone par open karte hi tamam {poses.length} poses mobile app me save ho jayenge!
+              </p>
+
+              <div style={{ backgroundColor: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '12px', marginBottom: '20px', wordBreak: 'break-all', fontSize: '12px', color: '#D4AF37', maxHeight: '90px', overflowY: 'auto' }}>
+                {mobileSyncUrl}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`📸 *Snap Photography - Mobile Poses Sync*\n\nApne mobile me تمام ${poses.length} poses load karne ke liye yeh link open karein:\n\n${mobileSyncUrl}`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    backgroundColor: '#25D366',
+                    color: '#fff',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    textDecoration: 'none',
+                    fontWeight: 'bold',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  💬 Send to WhatsApp
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(mobileSyncUrl);
+                    setCopiedMobileLink(true);
+                    setTimeout(() => setCopiedMobileLink(false), 2500);
+                  }}
+                  style={{
+                    backgroundColor: copiedMobileLink ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)',
+                    color: copiedMobileLink ? '#10b981' : '#fff',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    fontWeight: 'bold',
+                    fontSize: '13px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {copiedMobileLink ? '✓ Link Copied to Clipboard!' : '📋 Copy Mobile Sync Link'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SQL Help Modal */}
+      {showSqlHelp && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#12121a',
+            border: '1px solid rgba(239,68,68,0.4)',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '560px',
+            overflow: 'hidden',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.7)'
+          }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '24px' }}>🛠️</span>
+                <div>
+                  <h3 style={{ fontSize: '16px', color: '#fff', margin: 0, fontWeight: '700' }}>Supabase SQL Fix</h3>
+                  <p style={{ fontSize: '12px', color: '#aaa', margin: '2px 0 0 0' }}>Create snap_poses table in your Supabase project</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowSqlHelp(false)}
+                style={{ background: 'none', border: 'none', color: '#aaa', fontSize: '20px', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: '24px' }}>
+              <p style={{ fontSize: '13px', color: '#ccc', lineHeight: '1.6', margin: '0 0 14px 0' }}>
+                Supabase Dashboard me ja kar <strong>SQL Editor</strong> open karein aur yeh query paste kar k <strong>RUN</strong> press karein:
+              </p>
+
+              <div style={{ backgroundColor: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '14px', marginBottom: '16px', fontSize: '12px', color: '#e2d4a8', fontFamily: 'monospace', maxHeight: '180px', overflowY: 'auto' }}>
+                {`CREATE TABLE IF NOT EXISTS public.snap_poses (
+  id text PRIMARY KEY,
+  title text NOT NULL,
+  image_url text NOT NULL,
+  instructions text DEFAULT '',
+  subjects text[] DEFAULT '{}'::text[],
+  shoot_types text[] DEFAULT '{}'::text[],
+  events text[] DEFAULT '{}'::text[],
+  tags text[] DEFAULT '{}'::text[],
+  status text DEFAULT 'published',
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.snap_poses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public access to snap_poses" ON public.snap_poses;
+CREATE POLICY "Public access to snap_poses" ON public.snap_poses FOR ALL USING (true) WITH CHECK (true);`}
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const query = `CREATE TABLE IF NOT EXISTS public.snap_poses (
+  id text PRIMARY KEY,
+  title text NOT NULL,
+  image_url text NOT NULL,
+  instructions text DEFAULT '',
+  subjects text[] DEFAULT '{}'::text[],
+  shoot_types text[] DEFAULT '{}'::text[],
+  events text[] DEFAULT '{}'::text[],
+  tags text[] DEFAULT '{}'::text[],
+  status text DEFAULT 'published',
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.snap_poses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public access to snap_poses" ON public.snap_poses;
+CREATE POLICY "Public access to snap_poses" ON public.snap_poses FOR ALL USING (true) WITH CHECK (true);`;
+                    navigator.clipboard.writeText(query);
+                    alert('SQL Query copied to clipboard! Paste it into Supabase SQL Editor and click RUN.');
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#D4AF37',
+                    color: '#000',
+                    border: 'none',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    fontWeight: 'bold',
+                    fontSize: '13px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  📋 Copy SQL Query
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSqlHelp(false)}
+                  style={{
+                    backgroundColor: 'rgba(255,255,255,0.06)',
+                    color: '#aaa',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    padding: '12px 18px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
