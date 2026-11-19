@@ -430,11 +430,28 @@ export function getTrendingReelsDB(): TrendingReel[] {
   if (typeof window === 'undefined') return mockTrendingReels;
   try {
     const stored = localStorage.getItem(REELS_KEY);
-    if (!stored) {
-      localStorage.setItem(REELS_KEY, JSON.stringify(mockTrendingReels));
-      return mockTrendingReels;
+    let parsed: TrendingReel[] = [];
+    if (stored) {
+      try { parsed = JSON.parse(stored); } catch {}
     }
-    const parsed: TrendingReel[] = JSON.parse(stored);
+
+    // Smart seed: If local storage has 0 or only 1 old demo reel, seed with the full 33 reels library!
+    if (!parsed || parsed.length <= 1) {
+      const mergedInitial = [...mockTrendingReels];
+      if (parsed.length === 1 && !mockTrendingReels.some(r => r.id === parsed[0].id)) {
+        mergedInitial.push(parsed[0]);
+      }
+      localStorage.setItem(REELS_KEY, JSON.stringify(mergedInitial));
+      return mergedInitial;
+    }
+
+    // Merge any missing mock reels into existing list so the full library is always available across devices
+    const existingIds = new Set(parsed.map(r => r.id));
+    const missingMocks = mockTrendingReels.filter(r => !existingIds.has(r.id) && !DELETED_REEL_IDS.has(r.id));
+    if (missingMocks.length > 0) {
+      parsed = [...parsed, ...missingMocks];
+      localStorage.setItem(REELS_KEY, JSON.stringify(parsed));
+    }
     
     // Deduplicate by title & remove unwanted bottom row reels
     const seenTitles = new Set<string>();
