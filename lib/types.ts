@@ -127,6 +127,7 @@ export interface ClientSelectionSession {
   event_date?: string;
   notes_for_client?: string;
   client_notes?: string;
+  content_mode?: 'both' | 'reels_only' | 'poses_only';
   selected_pose_ids: string[];
   selected_reel_ids: string[];
   status: 'pending' | 'submitted' | 'expired';

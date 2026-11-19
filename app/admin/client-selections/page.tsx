@@ -32,6 +32,7 @@ export default function AdminClientSelections() {
   const [eventType, setEventType] = useState('Barat');
   const [eventDate, setEventDate] = useState('');
   const [expiryDays, setExpiryDays] = useState(7);
+  const [contentMode, setContentMode] = useState<'both' | 'reels_only' | 'poses_only'>('both');
   const [notesForClient, setNotesForClient] = useState('');
   const [createdSession, setCreatedSession] = useState<ClientSelectionSession | null>(null);
 
@@ -117,6 +118,7 @@ export default function AdminClientSelections() {
       event_date: eventDate,
       expiry_days: expiryDays,
       notes_for_client: notesForClient,
+      content_mode: contentMode,
     });
 
     setSessions(getClientSelectionsDB());
@@ -127,6 +129,7 @@ export default function AdminClientSelections() {
     setClientPhone('');
     setNotesForClient('');
     setEventDate('');
+    setContentMode('both');
   };
 
   const handleDelete = (id: string, name: string) => {
@@ -327,10 +330,25 @@ export default function AdminClientSelections() {
                       {s.event_type} {s.event_date ? `· ${s.event_date}` : ''}
                     </span>
 
+                    {/* Content Mode Badge */}
+                    {s.content_mode === 'reels_only' ? (
+                      <span style={{ backgroundColor: 'rgba(244,63,94,0.15)', color: '#fb7185', border: '1px solid rgba(244,63,94,0.35)', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                        🔥 Reels Only
+                      </span>
+                    ) : s.content_mode === 'poses_only' ? (
+                      <span style={{ backgroundColor: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.35)', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                        📸 Poses Only
+                      </span>
+                    ) : (
+                      <span style={{ backgroundColor: 'rgba(212,175,55,0.12)', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.3)', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                        📸+🔥 Poses & Reels
+                      </span>
+                    )}
+
                     {/* Status Badge */}
                     {isSubmitted ? (
                       <span style={{ backgroundColor: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid #10b981', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>
-                        ✓ Selection Submitted ({s.selected_pose_ids.length} Poses, {s.selected_reel_ids.length} Reels)
+                        ✓ Selection Submitted ({s.content_mode === 'reels_only' ? `${s.selected_reel_ids.length} Reels` : s.content_mode === 'poses_only' ? `${s.selected_pose_ids.length} Poses` : `${s.selected_pose_ids.length} Poses, ${s.selected_reel_ids.length} Reels`})
                       </span>
                     ) : isExpired ? (
                       <span style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid #ef4444', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>
@@ -513,6 +531,73 @@ export default function AdminClientSelections() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#D4AF37', marginBottom: '8px' }}>
+                      What should the client choose? *
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setContentMode('both')}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: '8px',
+                          border: contentMode === 'both' ? '1.5px solid #D4AF37' : '1px solid rgba(255,255,255,0.1)',
+                          backgroundColor: contentMode === 'both' ? 'rgba(212,175,55,0.18)' : 'rgba(255,255,255,0.03)',
+                          color: contentMode === 'both' ? '#D4AF37' : '#aaa',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        📸 + 🔥 Both<br />
+                        <span style={{ fontSize: '10px', fontWeight: 'normal', color: contentMode === 'both' ? '#fff' : '#666' }}>Poses & Reels</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setContentMode('reels_only')}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: '8px',
+                          border: contentMode === 'reels_only' ? '1.5px solid #f97316' : '1px solid rgba(255,255,255,0.1)',
+                          backgroundColor: contentMode === 'reels_only' ? 'rgba(249,115,22,0.18)' : 'rgba(255,255,255,0.03)',
+                          color: contentMode === 'reels_only' ? '#fb923c' : '#aaa',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        🔥 Reels Only<br />
+                        <span style={{ fontSize: '10px', fontWeight: 'normal', color: contentMode === 'reels_only' ? '#fff' : '#666' }}>Trending Videos</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setContentMode('poses_only')}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: '8px',
+                          border: contentMode === 'poses_only' ? '1.5px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
+                          backgroundColor: contentMode === 'poses_only' ? 'rgba(59,130,246,0.18)' : 'rgba(255,255,255,0.03)',
+                          color: contentMode === 'poses_only' ? '#60a5fa' : '#aaa',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        📸 Poses Only<br />
+                        <span style={{ fontSize: '10px', fontWeight: 'normal', color: contentMode === 'poses_only' ? '#fff' : '#666' }}>Photos Only</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#aaa', marginBottom: '6px' }}>Client Name *</label>
                     <input
                       type="text"
@@ -623,9 +708,22 @@ export default function AdminClientSelections() {
           <div style={{ backgroundColor: '#111118', border: '1px solid rgba(212,175,55,0.4)', borderRadius: '16px', maxWidth: '700px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.9)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '12px' }}>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0, color: '#D4AF37' }}>
-                  {viewSession.client_name}&apos;s Selection
-                </h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0, color: '#D4AF37' }}>
+                    {viewSession.client_name}&apos;s Selection
+                  </h2>
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    backgroundColor: viewSession.content_mode === 'reels_only' ? 'rgba(249,115,22,0.18)' : viewSession.content_mode === 'poses_only' ? 'rgba(59,130,246,0.18)' : 'rgba(212,175,55,0.18)',
+                    color: viewSession.content_mode === 'reels_only' ? '#fb923c' : viewSession.content_mode === 'poses_only' ? '#60a5fa' : '#D4AF37',
+                    border: viewSession.content_mode === 'reels_only' ? '1px solid rgba(249,115,22,0.4)' : viewSession.content_mode === 'poses_only' ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(212,175,55,0.4)',
+                  }}>
+                    {viewSession.content_mode === 'reels_only' ? '🔥 Reels Only' : viewSession.content_mode === 'poses_only' ? '📸 Poses Only' : '📸 + 🔥 Poses & Reels'}
+                  </span>
+                </div>
                 <p style={{ fontSize: '12px', color: '#aaa', margin: '4px 0 0 0' }}>
                   Event: {viewSession.event_type} {viewSession.event_date ? `(${viewSession.event_date})` : ''} · Status: {viewSession.status.toUpperCase()}
                 </p>
@@ -640,56 +738,60 @@ export default function AdminClientSelections() {
               </div>
             )}
 
-            {/* Selected Poses Grid */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#fff', marginBottom: '10px' }}>
-                📸 Selected Poses ({viewSession.selected_pose_ids.length})
-              </div>
-              {viewSession.selected_pose_ids.length === 0 ? (
-                <div style={{ fontSize: '13px', color: '#666', fontStyle: 'italic' }}>Client has not selected any poses yet.</div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
-                  {viewSession.selected_pose_ids.map(id => {
-                    const p = poses.find(item => item.id === id);
-                    if (!p) return null;
-                    return (
-                      <div key={id} style={{ backgroundColor: '#0a0a0f', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
-                        <img src={p.image_url} alt={p.title} style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover' }} />
-                        <div style={{ padding: '6px', fontSize: '10px', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {p.title}
-                        </div>
-                      </div>
-                    );
-                  })}
+            {/* Selected Poses Grid (hidden if reels_only) */}
+            {viewSession.content_mode !== 'reels_only' && (
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#fff', marginBottom: '10px' }}>
+                  📸 Selected Poses ({viewSession.selected_pose_ids.length})
                 </div>
-              )}
-            </div>
+                {viewSession.selected_pose_ids.length === 0 ? (
+                  <div style={{ fontSize: '13px', color: '#666', fontStyle: 'italic' }}>Client has not selected any poses yet.</div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
+                    {viewSession.selected_pose_ids.map(id => {
+                      const p = poses.find(item => item.id === id);
+                      if (!p) return null;
+                      return (
+                        <div key={id} style={{ backgroundColor: '#0a0a0f', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                          <img src={p.image_url} alt={p.title} style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover' }} />
+                          <div style={{ padding: '6px', fontSize: '10px', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p.title}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
-            {/* Selected Reels Grid */}
-            <div style={{ marginBottom: '24px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#fff', marginBottom: '10px' }}>
-                🔥 Selected Reels ({viewSession.selected_reel_ids.length})
-              </div>
-              {viewSession.selected_reel_ids.length === 0 ? (
-                <div style={{ fontSize: '13px', color: '#666', fontStyle: 'italic' }}>Client has not selected any reels yet.</div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
-                  {viewSession.selected_reel_ids.map(id => {
-                    const r = reels.find(item => item.id === id);
-                    if (!r) return null;
-                    const cover = formatOptimizedCoverUrl(r.video_url, r.cover_image);
-                    return (
-                      <div key={id} style={{ backgroundColor: '#0a0a0f', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
-                        <img src={cover} alt={r.title} style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover' }} />
-                        <div style={{ padding: '6px', fontSize: '10px', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {r.title}
-                        </div>
-                      </div>
-                    );
-                  })}
+            {/* Selected Reels Grid (hidden if poses_only) */}
+            {viewSession.content_mode !== 'poses_only' && (
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#fff', marginBottom: '10px' }}>
+                  🔥 Selected Reels ({viewSession.selected_reel_ids.length})
                 </div>
-              )}
-            </div>
+                {viewSession.selected_reel_ids.length === 0 ? (
+                  <div style={{ fontSize: '13px', color: '#666', fontStyle: 'italic' }}>Client has not selected any reels yet.</div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
+                    {viewSession.selected_reel_ids.map(id => {
+                      const r = reels.find(item => item.id === id);
+                      if (!r) return null;
+                      const cover = formatOptimizedCoverUrl(r.video_url, r.cover_image);
+                      return (
+                        <div key={id} style={{ backgroundColor: '#0a0a0f', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                          <img src={cover} alt={r.title} style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover' }} />
+                          <div style={{ padding: '6px', fontSize: '10px', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {r.title}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Modal Actions */}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>

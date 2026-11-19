@@ -51,6 +51,7 @@ export function encodeSessionPayload(session: ClientSelectionSession): string {
       e: session.event_type || '',
       d: session.event_date || '',
       m: session.notes_for_client || '',
+      cm: session.content_mode || 'both',
       x: session.expires_at || '',
       c: session.created_at,
     };
@@ -85,6 +86,7 @@ export function decodeSessionPayload(encoded: string): ClientSelectionSession | 
       event_type: c.e || 'General',
       event_date: c.d || undefined,
       notes_for_client: c.m || undefined,
+      content_mode: c.cm || 'both',
       selected_pose_ids: [],
       selected_reel_ids: [],
       status,
@@ -107,6 +109,7 @@ export function encodeSubmissionPayload(session: ClientSelectionSession): string
       e: session.event_type || '',
       d: session.event_date || '',
       m: session.notes_for_client || '',
+      cm: session.content_mode || 'both',
       cn: session.client_notes || '',
       sp: session.selected_pose_ids || [],
       sr: session.selected_reel_ids || [],
@@ -137,6 +140,7 @@ export function decodeSubmissionPayload(encoded: string): ClientSelectionSession
       event_type: c.e || 'General',
       event_date: c.d || undefined,
       notes_for_client: c.m || undefined,
+      content_mode: c.cm || 'both',
       client_notes: c.cn || undefined,
       selected_pose_ids: Array.isArray(c.sp) ? c.sp : [],
       selected_reel_ids: Array.isArray(c.sr) ? c.sr : [],
@@ -194,6 +198,7 @@ export function createClientSelectionSession(params: {
   event_date?: string;
   notes_for_client?: string;
   expiry_days?: number; // 0 or undefined for no expiry, or 3, 7, 14, 30
+  content_mode?: 'both' | 'reels_only' | 'poses_only';
 }): ClientSelectionSession {
   const current = getClientSelectionsDB();
   const timestamp = Date.now();
@@ -214,6 +219,7 @@ export function createClientSelectionSession(params: {
     event_type: params.event_type?.trim() || 'General',
     event_date: params.event_date?.trim() || undefined,
     notes_for_client: params.notes_for_client?.trim() || undefined,
+    content_mode: params.content_mode || 'both',
     selected_pose_ids: [],
     selected_reel_ids: [],
     status: 'pending',
@@ -234,6 +240,7 @@ export function createClientSelectionSession(params: {
       event_type: session.event_type,
       event_date: session.event_date || null,
       notes_for_client: session.notes_for_client || null,
+      content_mode: session.content_mode || 'both',
       selected_pose_ids: session.selected_pose_ids,
       selected_reel_ids: session.selected_reel_ids,
       status: session.status,
@@ -290,6 +297,7 @@ export async function fetchClientSelectionByTokenCloud(token: string): Promise<C
         event_date: data.event_date || undefined,
         notes_for_client: data.notes_for_client || undefined,
         client_notes: data.client_notes || undefined,
+        content_mode: data.content_mode || 'both',
         selected_pose_ids: data.selected_pose_ids || [],
         selected_reel_ids: data.selected_reel_ids || [],
         status: data.status || 'pending',
@@ -328,6 +336,7 @@ export async function fetchClientSelectionsCloud(): Promise<ClientSelectionSessi
         event_date: d.event_date || undefined,
         notes_for_client: d.notes_for_client || undefined,
         client_notes: d.client_notes || undefined,
+        content_mode: d.content_mode || 'both',
         selected_pose_ids: d.selected_pose_ids || [],
         selected_reel_ids: d.selected_reel_ids || [],
         status: d.status || 'pending',
@@ -438,12 +447,26 @@ export function generateWhatsAppShareText(session: ClientSelectionSession, origi
   const eventMsg = session.event_type && session.event_type !== 'All' ? `for your ${session.event_type}` : '';
   const dateMsg = session.event_date ? ` (${session.event_date})` : '';
 
-  let message = `Assalam-o-Alaikum ${session.client_name}! 📸✨\n\n`;
-  message += `Here is your customized posing & trending reels selection link ${eventMsg}${dateMsg}:\n`;
+  let modeTitle = 'posing & trending reels';
+  let modeEmoji = '📸🔥';
+  if (session.content_mode === 'reels_only') {
+    modeTitle = 'trending reels';
+    modeEmoji = '🔥🎬';
+  } else if (session.content_mode === 'poses_only') {
+    modeTitle = 'wedding poses';
+    modeEmoji = '📸✨';
+  }
+
+  let message = `Assalam-o-Alaikum ${session.client_name}! ${modeEmoji}\n\n`;
+  message += `Here is your customized ${modeTitle} selection link ${eventMsg}${dateMsg}:\n`;
   message += `🔗 ${shareUrl}\n\n`;
 
   if (session.notes_for_client) {
     message += `📝 Note: "${session.notes_for_client}"\n\n`;
+  } else if (session.content_mode === 'reels_only') {
+    message += `Please open the link to watch and select your favorite cinematic reels. Our team will follow your chosen video styles during the shoot!\n\n`;
+  } else if (session.content_mode === 'poses_only') {
+    message += `Please open the link to select your favorite poses. Our photography team will follow your chosen styles during the shoot!\n\n`;
   } else {
     message += `Please open the link to select your favorite poses and reels. Our photography team will follow your chosen styles during the shoot!\n\n`;
   }
@@ -460,12 +483,23 @@ export function generateWhatsAppShareText(session: ClientSelectionSession, origi
 export function generateWhatsAppSubmissionSummary(session: ClientSelectionSession, originUrl = ''): string {
   const importUrl = generateAdminImportUrl(session, originUrl);
 
-  let summary = `📸 *Client Selection Submitted!* ✨\n\n`;
+  let titleHeader = 'Client Selection Submitted!';
+  if (session.content_mode === 'reels_only') {
+    titleHeader = 'Client Reels Selection Submitted!';
+  } else if (session.content_mode === 'poses_only') {
+    titleHeader = 'Client Poses Selection Submitted!';
+  }
+
+  let summary = `📸 *${titleHeader}* ✨\n\n`;
   summary += `👤 Client: *${session.client_name}*\n`;
   if (session.client_phone) summary += `📞 Phone: ${session.client_phone}\n`;
   summary += `🎉 Event: *${session.event_type}* ${session.event_date ? `(${session.event_date})` : ''}\n`;
-  summary += `📷 Poses Selected: *${session.selected_pose_ids.length}*\n`;
-  summary += `🔥 Reels Selected: *${session.selected_reel_ids.length}*\n\n`;
+  if (session.content_mode !== 'reels_only') {
+    summary += `📷 Poses Selected: *${session.selected_pose_ids.length}*\n`;
+  }
+  if (session.content_mode !== 'poses_only') {
+    summary += `🔥 Reels Selected: *${session.selected_reel_ids.length}*\n\n`;
+  }
 
   if (session.client_notes) {
     summary += `💬 Client Notes: "${session.client_notes}"\n\n`;

@@ -87,6 +87,11 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
         setSession(s);
         setSelectedPoseIds(s.selected_pose_ids || []);
         setSelectedReelIds(s.selected_reel_ids || []);
+        if (s.content_mode === 'reels_only') {
+          setActiveTab('reels');
+        } else if (s.content_mode === 'poses_only') {
+          setActiveTab('poses');
+        }
         if (s.client_notes) setClientNotes(s.client_notes);
         if (s.status === 'submitted') setSubmittedSuccess(true);
         if (s.event_type && s.event_type !== 'All' && s.event_type !== 'General') {
@@ -129,7 +134,18 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
 
   // Submit client selection
   const handleConfirmSubmit = () => {
-    if (selectedPoseIds.length === 0 && selectedReelIds.length === 0) {
+    const isReelsOnly = session?.content_mode === 'reels_only';
+    const isPosesOnly = session?.content_mode === 'poses_only';
+
+    if (isReelsOnly && selectedReelIds.length === 0) {
+      alert('Please select at least 1 reel before submitting.');
+      return;
+    }
+    if (isPosesOnly && selectedPoseIds.length === 0) {
+      alert('Please select at least 1 pose before submitting.');
+      return;
+    }
+    if (!isReelsOnly && !isPosesOnly && selectedPoseIds.length === 0 && selectedReelIds.length === 0) {
       alert('Please select at least 1 pose or reel before submitting.');
       return;
     }
@@ -240,7 +256,9 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
           <img src="/logo.png" alt="Logo" style={{ height: '30px', width: 'auto', borderRadius: '6px' }} onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
           <div>
             <div style={{ fontSize: '11px', color: '#D4AF37', fontWeight: 'bold', letterSpacing: '1px', textTransform: 'uppercase' }}>Snap Photography Studio</div>
-            <div style={{ fontSize: '14px', fontWeight: '700', color: '#fff' }}>Client Posing & Reel Selection</div>
+            <div style={{ fontSize: '14px', fontWeight: '700', color: '#fff' }}>
+              {session.content_mode === 'reels_only' ? 'Client Trending Reels Selection' : session.content_mode === 'poses_only' ? 'Client Wedding Poses Selection' : 'Client Posing & Reel Selection'}
+            </div>
           </div>
         </div>
 
@@ -285,7 +303,11 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
           </h1>
           
           <p style={{ fontSize: '13px', color: '#bbb', margin: 0, lineHeight: '1.5', maxWidth: '640px' }}>
-            Apne shoot ke liye pasandida poses aur trending reels select karein. Hamari team shoot wale din aapke chune hue styles ko follow karegi!
+            {session.content_mode === 'reels_only'
+              ? 'Apne shoot ke liye cinematic trending video references select karein. Hamari team shoot wale din aapke chune hue reels ke mutabiq shots banayegi!'
+              : session.content_mode === 'poses_only'
+                ? 'Apne shoot ke liye pasandida wedding poses select karein. Hamari team shoot wale din aapke chune hue poses follow karegi!'
+                : 'Apne shoot ke liye pasandida poses aur trending reels select karein. Hamari team shoot wale din aapke chune hue styles ko follow karegi!'}
           </p>
 
           {/* Photographer's Custom Note to Client */}
@@ -302,7 +324,7 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
           {submittedSuccess && (
             <div style={{ marginTop: '14px', padding: '12px 16px', borderRadius: '10px', backgroundColor: 'rgba(16,185,129,0.12)', border: '1px solid #10b981', color: '#34d399', fontSize: '13px', fontWeight: '600', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
               <div>
-                ✅ <strong>Selection Successfully Submitted!</strong> ({selectedPoseIds.length} Poses, {selectedReelIds.length} Reels). Aap chahein toh mazeed tabdeeli karke dobara submit kar sakte hain.
+                ✅ <strong>Selection Successfully Submitted!</strong> ({session.content_mode === 'reels_only' ? `${selectedReelIds.length} Reels` : session.content_mode === 'poses_only' ? `${selectedPoseIds.length} Poses` : `${selectedPoseIds.length} Poses, ${selectedReelIds.length} Reels`}). Aap chahein toh mazeed tabdeeli karke dobara submit kar sakte hain.
               </div>
               <button
                 onClick={() => {
@@ -321,58 +343,108 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
 
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '16px 20px' }}>
         
-        {/* Main Tab Switcher: Poses vs Reels */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
-          <button
-            onClick={() => setActiveTab('poses')}
-            style={{
-              flex: 1,
-              padding: '12px',
-              borderRadius: '10px',
-              border: activeTab === 'poses' ? '1px solid #D4AF37' : '1px solid rgba(255,255,255,0.08)',
-              backgroundColor: activeTab === 'poses' ? 'rgba(212,175,55,0.15)' : '#12121a',
-              color: activeTab === 'poses' ? '#D4AF37' : '#aaa',
-              fontWeight: '700',
-              fontSize: '14px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transition: 'all 0.15s'
-            }}
-          >
-            <span>📸 Wedding Poses</span>
-            <span style={{ backgroundColor: activeTab === 'poses' ? '#D4AF37' : 'rgba(255,255,255,0.1)', color: activeTab === 'poses' ? '#000' : '#aaa', fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
-              {selectedPoseIds.length} chosen
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('reels')}
-            style={{
-              flex: 1,
-              padding: '12px',
-              borderRadius: '10px',
-              border: activeTab === 'reels' ? '1px solid #D4AF37' : '1px solid rgba(255,255,255,0.08)',
-              backgroundColor: activeTab === 'reels' ? 'rgba(212,175,55,0.15)' : '#12121a',
-              color: activeTab === 'reels' ? '#D4AF37' : '#aaa',
-              fontWeight: '700',
-              fontSize: '14px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transition: 'all 0.15s'
-            }}
-          >
-            <span>🔥 Trending Reels</span>
-            <span style={{ backgroundColor: activeTab === 'reels' ? '#D4AF37' : 'rgba(255,255,255,0.1)', color: activeTab === 'reels' ? '#000' : '#aaa', fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
+        {/* Main Tab Switcher or Single Mode Banner */}
+        {session.content_mode === 'reels_only' ? (
+          <div style={{
+            padding: '14px 18px',
+            marginBottom: '16px',
+            borderRadius: '12px',
+            backgroundColor: 'rgba(249,115,22,0.12)',
+            border: '1px solid rgba(249,115,22,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '18px' }}>🔥</span>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#fb923c' }}>Trending Cinematic Wedding Reels</div>
+                <div style={{ fontSize: '11px', color: '#aaa' }}>Apne shoot ke liye best reel references choose karein</div>
+              </div>
+            </div>
+            <span style={{ backgroundColor: '#f97316', color: '#000', fontSize: '12px', padding: '4px 10px', borderRadius: '12px', fontWeight: 'bold' }}>
               {selectedReelIds.length} chosen
             </span>
-          </button>
-        </div>
+          </div>
+        ) : session.content_mode === 'poses_only' ? (
+          <div style={{
+            padding: '14px 18px',
+            marginBottom: '16px',
+            borderRadius: '12px',
+            backgroundColor: 'rgba(59,130,246,0.12)',
+            border: '1px solid rgba(59,130,246,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '18px' }}>📸</span>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>Wedding Photography Poses</div>
+                <div style={{ fontSize: '11px', color: '#aaa' }}>Apne shoot ke liye best photography poses choose karein</div>
+              </div>
+            </div>
+            <span style={{ backgroundColor: '#60a5fa', color: '#000', fontSize: '12px', padding: '4px 10px', borderRadius: '12px', fontWeight: 'bold' }}>
+              {selectedPoseIds.length} chosen
+            </span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
+            <button
+              onClick={() => setActiveTab('poses')}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '10px',
+                border: activeTab === 'poses' ? '1px solid #D4AF37' : '1px solid rgba(255,255,255,0.08)',
+                backgroundColor: activeTab === 'poses' ? 'rgba(212,175,55,0.15)' : '#12121a',
+                color: activeTab === 'poses' ? '#D4AF37' : '#aaa',
+                fontWeight: '700',
+                fontSize: '14px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.15s'
+              }}
+            >
+              <span>📸 Wedding Poses</span>
+              <span style={{ backgroundColor: activeTab === 'poses' ? '#D4AF37' : 'rgba(255,255,255,0.1)', color: activeTab === 'poses' ? '#000' : '#aaa', fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
+                {selectedPoseIds.length} chosen
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('reels')}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '10px',
+                border: activeTab === 'reels' ? '1px solid #D4AF37' : '1px solid rgba(255,255,255,0.08)',
+                backgroundColor: activeTab === 'reels' ? 'rgba(212,175,55,0.15)' : '#12121a',
+                color: activeTab === 'reels' ? '#D4AF37' : '#aaa',
+                fontWeight: '700',
+                fontSize: '14px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.15s'
+              }}
+            >
+              <span>🔥 Trending Reels</span>
+              <span style={{ backgroundColor: activeTab === 'reels' ? '#D4AF37' : 'rgba(255,255,255,0.1)', color: activeTab === 'reels' ? '#000' : '#aaa', fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
+                {selectedReelIds.length} chosen
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Search & Filter Row */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
@@ -679,10 +751,22 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#fff' }}>
-              📸 {selectedPoseIds.length} Poses <span style={{ color: '#666' }}>|</span> 🔥 {selectedReelIds.length} Reels
+              {session.content_mode === 'reels_only' ? (
+                <>🔥 {selectedReelIds.length} Reels Selected</>
+              ) : session.content_mode === 'poses_only' ? (
+                <>📸 {selectedPoseIds.length} Poses Selected</>
+              ) : (
+                <>📸 {selectedPoseIds.length} Poses <span style={{ color: '#666' }}>|</span> 🔥 {selectedReelIds.length} Reels</>
+              )}
             </div>
             <div style={{ fontSize: '11px', color: '#D4AF37' }}>
-              {totalSelectedCount > 0 ? `${totalSelectedCount} items chosen for your shoot` : 'Select poses & reels above'}
+              {totalSelectedCount > 0 
+                ? `${totalSelectedCount} items chosen for your shoot` 
+                : session.content_mode === 'reels_only' 
+                  ? 'Select reels above' 
+                  : session.content_mode === 'poses_only' 
+                    ? 'Select poses above' 
+                    : 'Select poses & reels above'}
             </div>
           </div>
         </div>
@@ -716,63 +800,67 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '12px' }}>
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0, color: '#D4AF37' }}>Review Your Selection</h2>
-                <p style={{ fontSize: '12px', color: '#aaa', margin: '4px 0 0 0' }}>Review your chosen poses and add any personal notes for the team.</p>
+                <p style={{ fontSize: '12px', color: '#aaa', margin: '4px 0 0 0' }}>Review your chosen items and add any personal notes for the team.</p>
               </div>
               <button onClick={() => setShowReviewModal(false)} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: '18px', cursor: 'pointer' }}>✕</button>
             </div>
 
-            {/* Selected Poses Summary */}
-            <div style={{ marginBottom: '18px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#fff', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
-                <span>📸 Selected Poses ({selectedPoseIds.length})</span>
-                {selectedPoseIds.length > 0 && (
-                  <button onClick={() => setSelectedPoseIds([])} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '11px', cursor: 'pointer' }}>Clear all</button>
+            {/* Selected Poses Summary (hidden if reels_only) */}
+            {session.content_mode !== 'reels_only' && (
+              <div style={{ marginBottom: '18px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#fff', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>📸 Selected Poses ({selectedPoseIds.length})</span>
+                  {selectedPoseIds.length > 0 && (
+                    <button onClick={() => setSelectedPoseIds([])} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '11px', cursor: 'pointer' }}>Clear all</button>
+                  )}
+                </div>
+                {selectedPoseIds.length === 0 ? (
+                  <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>No poses selected yet.</div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
+                    {selectedPoseIds.map(id => {
+                      const p = poses.find(item => item.id === id);
+                      if (!p) return null;
+                      return (
+                        <div key={id} style={{ position: 'relative', width: '65px', height: '85px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(212,175,55,0.4)' }}>
+                          <img src={p.image_url} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <button onClick={() => togglePose(id)} style={{ position: 'absolute', top: 2, right: 2, width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-              {selectedPoseIds.length === 0 ? (
-                <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>No poses selected yet.</div>
-              ) : (
-                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
-                  {selectedPoseIds.map(id => {
-                    const p = poses.find(item => item.id === id);
-                    if (!p) return null;
-                    return (
-                      <div key={id} style={{ position: 'relative', width: '65px', height: '85px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(212,175,55,0.4)' }}>
-                        <img src={p.image_url} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        <button onClick={() => togglePose(id)} style={{ position: 'absolute', top: 2, right: 2, width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>✕</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            )}
 
-            {/* Selected Reels Summary */}
-            <div style={{ marginBottom: '18px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#fff', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
-                <span>🔥 Selected Reels ({selectedReelIds.length})</span>
-                {selectedReelIds.length > 0 && (
-                  <button onClick={() => setSelectedReelIds([])} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '11px', cursor: 'pointer' }}>Clear all</button>
+            {/* Selected Reels Summary (hidden if poses_only) */}
+            {session.content_mode !== 'poses_only' && (
+              <div style={{ marginBottom: '18px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#fff', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>🔥 Selected Reels ({selectedReelIds.length})</span>
+                  {selectedReelIds.length > 0 && (
+                    <button onClick={() => setSelectedReelIds([])} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '11px', cursor: 'pointer' }}>Clear all</button>
+                  )}
+                </div>
+                {selectedReelIds.length === 0 ? (
+                  <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>No reels selected yet.</div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
+                    {selectedReelIds.map(id => {
+                      const r = reels.find(item => item.id === id);
+                      if (!r) return null;
+                      const cover = formatOptimizedCoverUrl(r.video_url, r.cover_image);
+                      return (
+                        <div key={id} style={{ position: 'relative', width: '65px', height: '100px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(212,175,55,0.4)' }}>
+                          <img src={cover} alt={r.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <button onClick={() => toggleReel(id)} style={{ position: 'absolute', top: 2, right: 2, width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-              {selectedReelIds.length === 0 ? (
-                <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>No reels selected yet.</div>
-              ) : (
-                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
-                  {selectedReelIds.map(id => {
-                    const r = reels.find(item => item.id === id);
-                    if (!r) return null;
-                    const cover = formatOptimizedCoverUrl(r.video_url, r.cover_image);
-                    return (
-                      <div key={id} style={{ position: 'relative', width: '65px', height: '100px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(212,175,55,0.4)' }}>
-                        <img src={cover} alt={r.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        <button onClick={() => toggleReel(id)} style={{ position: 'absolute', top: 2, right: 2, width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>✕</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Client Personal Notes */}
             <div style={{ marginBottom: '20px' }}>
