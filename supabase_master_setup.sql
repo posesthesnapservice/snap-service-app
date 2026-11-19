@@ -208,7 +208,28 @@ ALTER TABLE public.snap_assignments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public access to snap_assignments" ON public.snap_assignments;
 CREATE POLICY "Public access to snap_assignments" ON public.snap_assignments FOR ALL USING (true) WITH CHECK (true);
 
--- 15. STORAGE BUCKET FOR FALLBACK MEDIA (snap_media)
+-- 15. CLIENT SELECTIONS TABLE (Temporary Client Selection Links)
+CREATE TABLE IF NOT EXISTS public.snap_client_selections (
+  id text PRIMARY KEY,
+  token text NOT NULL UNIQUE,
+  client_name text NOT NULL,
+  client_phone text,
+  event_type text DEFAULT 'General',
+  event_date text,
+  notes_for_client text,
+  client_notes text,
+  selected_pose_ids text[] DEFAULT '{}'::text[],
+  selected_reel_ids text[] DEFAULT '{}'::text[],
+  status text DEFAULT 'pending',
+  expires_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  submitted_at timestamp with time zone
+);
+ALTER TABLE public.snap_client_selections ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public access to snap_client_selections" ON public.snap_client_selections;
+CREATE POLICY "Public access to snap_client_selections" ON public.snap_client_selections FOR ALL USING (true) WITH CHECK (true);
+
+-- 16. STORAGE BUCKET FOR FALLBACK MEDIA (snap_media)
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('snap_media', 'snap_media', true)
 ON CONFLICT (id) DO NOTHING;

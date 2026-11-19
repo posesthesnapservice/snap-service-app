@@ -6,7 +6,10 @@ import {
   getClientSelectionByToken, 
   fetchClientSelectionByTokenCloud, 
   submitClientSelection,
-  generateWhatsAppSubmissionSummary
+  generateWhatsAppSubmissionSummary,
+  decodeSessionPayload,
+  saveClientSelectionsDB,
+  getClientSelectionsDB
 } from '@/lib/client-selection-helpers';
 import { getPosesDB, fetchPosesCloud, getTrendingReelsDB, fetchTrendingReelsCloud } from '@/lib/poses-db-helpers';
 import { formatOptimizedVideoUrl, formatOptimizedCoverUrl } from '@/lib/cloudinary';
@@ -48,11 +51,39 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
   useEffect(() => {
     // Load session
     const loadSessionData = async () => {
-      let s = getClientSelectionByToken(token);
+      let s: ClientSelectionSession | null = null;
+
+      // 1. First priority: Check URL payload '?d=' (Self-contained, cross-device instant load)
+      if (typeof window !== 'undefined') {
+        const searchParams = new URLSearchParams(window.location.search);
+        const encodedData = searchParams.get('d');
+        if (encodedData) {
+          s = decodeSessionPayload(encodedData);
+        }
+      }
+
+      // 2. Second priority: Check local device DB
+      if (!s) {
+        s = getClientSelectionByToken(token);
+      }
+
+      // 3. Third priority: Check cloud Supabase DB
       if (!s) {
         s = await fetchClientSelectionByTokenCloud(token);
       }
+
+      // If found, reconcile with local storage (keep previous submission if exists)
       if (s) {
+        const current = getClientSelectionsDB();
+        const existing = current.find(item => item.id === s!.id || item.token === s!.token);
+        if (existing) {
+          if (existing.status === 'submitted') {
+            s = existing;
+          }
+        } else {
+          saveClientSelectionsDB([s, ...current]);
+        }
+
         setSession(s);
         setSelectedPoseIds(s.selected_pose_ids || []);
         setSelectedReelIds(s.selected_reel_ids || []);
@@ -104,7 +135,21 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
     }
 
     setIsSubmitting(true);
-    const updated = submitClientSelection(token, selectedPoseIds, selectedReelIds, clientNotes);
+    let updated = submitClientSelection(token, selectedPoseIds, selectedReelIds, clientNotes);
+    if (!updated && session) {
+      const now = new Date().toISOString();
+      updated = {
+        ...session,
+        selected_pose_ids: selectedPoseIds,
+        selected_reel_ids: selectedReelIds,
+        client_notes: clientNotes.trim() || undefined,
+        status: 'submitted',
+        submitted_at: now
+      };
+      const current = getClientSelectionsDB();
+      saveClientSelectionsDB([updated, ...current.filter(x => x.id !== updated!.id)]);
+    }
+
     if (updated) {
       setSession(updated);
       setSubmittedSuccess(true);
@@ -261,12 +306,13 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
               </div>
               <button
                 onClick={() => {
-                  const summary = generateWhatsAppSubmissionSummary(session);
+                  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                  const summary = generateWhatsAppSubmissionSummary(session, origin);
                   window.open(`https://wa.me/?text=${encodeURIComponent(summary)}`, '_blank');
                 }}
-                style={{ backgroundColor: '#25D366', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                style={{ backgroundColor: '#25D366', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
               >
-                💬 WhatsApp to Studio
+                💬 Send Picks to Studio on WhatsApp
               </button>
             </div>
           )}

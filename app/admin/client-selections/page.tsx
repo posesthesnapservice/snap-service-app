@@ -7,7 +7,11 @@ import {
   createClientSelectionSession, 
   deleteClientSelectionDB,
   generateWhatsAppShareText,
-  generateWhatsAppSubmissionSummary
+  generateWhatsAppSubmissionSummary,
+  generateClientShareUrl,
+  fetchClientSelectionsCloud,
+  decodeSubmissionPayload,
+  saveClientSelectionsDB
 } from '@/lib/client-selection-helpers';
 import { getPosesDB, getTrendingReelsDB } from '@/lib/poses-db-helpers';
 import { mergeTodayShootItems } from '@/lib/today-shoot-helpers';
@@ -19,6 +23,7 @@ export default function AdminClientSelections() {
   const [sessions, setSessions] = useState<ClientSelectionSession[]>([]);
   const [poses, setPoses] = useState<Pose[]>([]);
   const [reels, setReels] = useState<TrendingReel[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Create Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -42,10 +47,64 @@ export default function AdminClientSelections() {
   };
 
   useEffect(() => {
-    setSessions(getClientSelectionsDB());
+    const local = getClientSelectionsDB();
+    setSessions(local);
     setPoses(getPosesDB());
     setReels(getTrendingReelsDB());
+
+    // 1. Check if URL has ?import=... from WhatsApp
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const importParam = searchParams.get('import');
+      if (importParam) {
+        const imported = decodeSubmissionPayload(importParam);
+        if (imported) {
+          const current = getClientSelectionsDB();
+          const updated = [imported, ...current.filter(x => x.id !== imported.id && x.token !== imported.token)];
+          saveClientSelectionsDB(updated);
+          setSessions(updated);
+          setViewSession(imported);
+          showToast(`✓ Received picks for "${imported.client_name}"!`);
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
+    }
+
+    // 2. Background sync from Supabase
+    fetchClientSelectionsCloud().then(cloudItems => {
+      if (cloudItems && cloudItems.length > 0) {
+        setSessions(cloudItems);
+      }
+    });
   }, []);
+
+  const handleSyncCloud = async () => {
+    setIsSyncing(true);
+    const updated = await fetchClientSelectionsCloud();
+    setSessions(updated);
+    setIsSyncing(false);
+    showToast('✓ Synced with Cloud');
+  };
+
+  const handleManualImport = () => {
+    const raw = prompt('Paste client WhatsApp submission text or link here:');
+    if (!raw) return;
+    let importCode = raw.trim();
+    if (importCode.includes('import=')) {
+      importCode = importCode.split('import=')[1].split('&')[0].split(' ')[0].trim();
+    }
+    const imported = decodeSubmissionPayload(importCode);
+    if (imported) {
+      const current = getClientSelectionsDB();
+      const updated = [imported, ...current.filter(x => x.id !== imported.id && x.token !== imported.token)];
+      saveClientSelectionsDB(updated);
+      setSessions(updated);
+      setViewSession(imported);
+      showToast(`✓ Successfully imported picks for "${imported.client_name}"!`);
+    } else {
+      alert('Could not decode submission data. Please ensure you copied the complete WhatsApp text or import link.');
+    }
+  };
 
   const handleCreateSession = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,11 +138,17 @@ export default function AdminClientSelections() {
     }
   };
 
-  const handleCopyLink = (token: string) => {
+  const handleCopyLink = (target: ClientSelectionSession | string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const link = `${origin}/select/${token}`;
+    let link = '';
+    if (typeof target === 'string') {
+      const found = sessions.find(s => s.token === target || s.id === target);
+      link = found ? generateClientShareUrl(found, origin) : `${origin}/select/${target}`;
+    } else {
+      link = generateClientShareUrl(target, origin);
+    }
     navigator.clipboard.writeText(link);
-    showToast('✓ Link copied to clipboard!');
+    showToast('✓ Resilient link copied to clipboard!');
   };
 
   const handleShareWhatsApp = (s: ClientSelectionSession) => {
@@ -132,28 +197,69 @@ export default function AdminClientSelections() {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setCreatedSession(null);
-            setShowCreateModal(true);
-          }}
-          style={{
-            backgroundColor: '#D4AF37',
-            color: '#000',
-            border: 'none',
-            padding: '11px 20px',
-            borderRadius: '8px',
-            fontSize: '13px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            boxShadow: '0 4px 14px rgba(212,175,55,0.3)'
-          }}
-        >
-          <span>+</span> Create Client Selection Link
-        </button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleManualImport}
+            style={{
+              backgroundColor: '#1b1b26',
+              color: '#25D366',
+              border: '1px solid rgba(37,211,102,0.4)',
+              padding: '11px 16px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <span>📥</span> Import WhatsApp Picks
+          </button>
+
+          <button
+            onClick={handleSyncCloud}
+            disabled={isSyncing}
+            style={{
+              backgroundColor: '#1b1b26',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.15)',
+              padding: '11px 16px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 'bold',
+              cursor: isSyncing ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <span>🔄</span> {isSyncing ? 'Syncing...' : 'Sync Cloud'}
+          </button>
+
+          <button
+            onClick={() => {
+              setCreatedSession(null);
+              setShowCreateModal(true);
+            }}
+            style={{
+              backgroundColor: '#D4AF37',
+              color: '#000',
+              border: 'none',
+              padding: '11px 20px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 4px 14px rgba(212,175,55,0.3)'
+            }}
+          >
+            <span>+</span> Create Client Selection Link
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -311,7 +417,7 @@ export default function AdminClientSelections() {
 
                   {/* Copy Link */}
                   <button
-                    onClick={() => handleCopyLink(s.token)}
+                    onClick={() => handleCopyLink(s)}
                     style={{
                       backgroundColor: 'rgba(212,175,55,0.1)',
                       border: '1px solid rgba(212,175,55,0.3)',
@@ -370,11 +476,11 @@ export default function AdminClientSelections() {
                   <input
                     type="text"
                     readOnly
-                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/select/${createdSession.token}`}
+                    value={generateClientShareUrl(createdSession)}
                     style={{ flex: 1, backgroundColor: 'transparent', border: 'none', color: '#D4AF37', fontSize: '12px', outline: 'none' }}
                   />
                   <button
-                    onClick={() => handleCopyLink(createdSession.token)}
+                    onClick={() => handleCopyLink(createdSession)}
                     style={{ backgroundColor: '#D4AF37', color: '#000', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}
                   >
                     Copy Link
@@ -588,7 +694,7 @@ export default function AdminClientSelections() {
             {/* Modal Actions */}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <button
-                onClick={() => handleCopyLink(viewSession.token)}
+                onClick={() => handleCopyLink(viewSession)}
                 style={{ backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#aaa', padding: '10px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
               >
                 📋 Copy Client Link
