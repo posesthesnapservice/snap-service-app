@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getTodayShootIds, toggleTodayShoot } from '@/lib/today-shoot-helpers';
-import { getPosesDB, fetchPosesCloud } from '@/lib/poses-db-helpers';
+import { getPosesDB, fetchPosesCloud, subscribeToPosesChanges, invalidateCloudCache } from '@/lib/poses-db-helpers';
 import { Pose } from '@/lib/types';
 import { getUser, canAccessPhotography } from '@/lib/auth-helpers';
 import { getSubjectColor, getEventColor } from '@/lib/constants';
@@ -23,6 +23,7 @@ export default function PosesPage() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [todayIds, setTodayIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Swipeable Popup States
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -31,6 +32,21 @@ export default function PosesPage() {
   
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
+
+  const handleManualRefresh = async () => {
+    setIsSyncing(true);
+    invalidateCloudCache('poses');
+    try {
+      const fresh = await fetchPosesCloud(true);
+      if (fresh && fresh.length > 0) {
+        setPosesList(fresh);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTimeout(() => setIsSyncing(false), 600);
+    }
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -43,20 +59,46 @@ export default function PosesPage() {
       router.replace('/home');
       return;
     }
+
+    // 1. Initial load from local storage
     setPosesList(getPosesDB());
     const favs = JSON.parse(localStorage.getItem('snap_favorites') || '[]');
     setFavorites(favs);
     setTodayIds(getTodayShootIds());
 
-    // Sync cloud poses from Supabase
-    fetchPosesCloud().then(cloudPoses => {
-      if (cloudPoses) {
+    // 2. Fetch fresh cloud poses immediately from Supabase
+    fetchPosesCloud(true).then(cloudPoses => {
+      if (cloudPoses && cloudPoses.length > 0) {
         setPosesList(cloudPoses);
       }
-    }).catch(() => {});
+      setLoading(false);
+    }).catch(() => setLoading(false));
 
-    const t = setTimeout(() => setLoading(false), 300);
-    return () => clearTimeout(t);
+    // 3. Realtime subscription: Mobile receives updates the instant desktop changes anything!
+    const unsubscribe = subscribeToPosesChanges((latest) => {
+      if (latest && latest.length > 0) {
+        setPosesList(latest);
+      }
+    });
+
+    // 4. Auto-refresh when user switches back to this tab / app on mobile
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchPosesCloud(true).then(cloudPoses => {
+          if (cloudPoses && cloudPoses.length > 0) {
+            setPosesList(cloudPoses);
+          }
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
   }, []);
 
   const toggleFav = (e: React.MouseEvent, id: string) => {
@@ -160,6 +202,27 @@ export default function PosesPage() {
           <button onClick={() => router.back()} style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.2rem', cursor: 'pointer' }}>←</button>
           <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 'bold', color: '#D4AF37' }}>Pose Library</h1>
         </div>
+
+        <button
+          onClick={handleManualRefresh}
+          disabled={isSyncing}
+          style={{
+            backgroundColor: isSyncing ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(212,175,55,0.3)',
+            color: '#D4AF37',
+            padding: '6px 12px',
+            borderRadius: '8px',
+            fontSize: '12px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          <span style={{ display: 'inline-block', transform: isSyncing ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s linear' }}>🔄</span>
+          <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
+        </button>
       </header>
 
       <input 

@@ -11,7 +11,7 @@ import {
   saveClientSelectionsDB,
   getClientSelectionsDB
 } from '@/lib/client-selection-helpers';
-import { getPosesDB, fetchPosesCloud, getTrendingReelsDB, fetchTrendingReelsCloud } from '@/lib/poses-db-helpers';
+import { getPosesDB, fetchPosesCloud, getTrendingReelsDB, fetchTrendingReelsCloud, subscribeToPosesChanges } from '@/lib/poses-db-helpers';
 import { mockPoses, mockTrendingReels } from '@/lib/mock-data';
 import { formatOptimizedVideoUrl, formatOptimizedCoverUrl } from '@/lib/cloudinary';
 import { Pose, TrendingReel, ClientSelectionSession } from '@/lib/types';
@@ -105,7 +105,7 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
       }
       setPoses(localPoses);
 
-      fetchPosesCloud().then(p => {
+      fetchPosesCloud(true).then(p => {
         if (p && p.length > 0) {
           const visible = p.filter(item => item.status !== 'hidden');
           if (visible.length > 0) setPoses(visible);
@@ -118,7 +118,7 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
       }
       setReels(localReels);
 
-      fetchTrendingReelsCloud().then(r => {
+      fetchTrendingReelsCloud(true).then(r => {
         if (r && r.length > 0) {
           const visible = r.filter(item => item.status !== 'hidden');
           if (visible.length > 0) setReels(visible);
@@ -129,6 +129,17 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
     };
 
     loadSessionData();
+
+    // Realtime sync on client page
+    const unsubscribe = subscribeToPosesChanges((latest) => {
+      if (latest && latest.length > 0) {
+        setPoses(latest.filter(item => item.status !== 'hidden'));
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [token]);
 
   // Toggle pose selection

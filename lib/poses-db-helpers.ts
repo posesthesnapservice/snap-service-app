@@ -136,12 +136,34 @@ export function getPosesDB(): Pose[] {
   }
 }
 
-export function savePosesDB(poses: Pose[]): void {
+export function toSupabasePosePayload(p: Pose) {
+  return {
+    id: p.id,
+    title: p.title || '',
+    image_url: p.image_url || '',
+    instructions: p.instructions || '',
+    subjects: Array.isArray(p.subjects) ? p.subjects : [],
+    shoot_types: Array.isArray(p.shoot_types) ? p.shoot_types : [],
+    events: Array.isArray(p.events) ? p.events : [],
+    tags: Array.isArray(p.tags) ? p.tags : [],
+    status: p.status || 'published',
+  };
+}
+
+export function savePosesDB(poses: Pose[], syncToCloud = true): void {
   if (typeof window === 'undefined') return;
   try {
     const deletedIds = getDeletedPoseIds();
     const cleaned = poses.filter(p => !deletedIds.has(p.id));
     localStorage.setItem(POSES_KEY, JSON.stringify(cleaned));
+
+    // Auto-sync non-mock poses to Supabase so other devices (Mobile) receive them
+    if (syncToCloud && cleaned.length > 0) {
+      const payload = cleaned.map(toSupabasePosePayload);
+      supabase.from('snap_poses').upsert(payload, { onConflict: 'id' }).then((res) => {
+        if (res && res.error) console.info('Supabase Poses auto-sync notice:', res.error.message);
+      });
+    }
   } catch (e) {
     console.error('Failed to save poses DB:', e);
   }
@@ -151,20 +173,12 @@ export function addPoseDB(newPose: Pose): Pose[] {
   invalidateCloudCache('poses');
   const current = getPosesDB();
   const updated = [newPose, ...current.filter(p => p.id !== newPose.id)];
-  savePosesDB(updated);
+  savePosesDB(updated, true);
   
   // Async sync to Supabase Database table
-  supabase.from('snap_poses').insert([{
-    id: newPose.id,
-    title: newPose.title,
-    image_url: newPose.image_url,
-    instructions: newPose.instructions || '',
-    subjects: newPose.subjects || [],
-    shoot_types: newPose.shoot_types || [],
-    events: newPose.events || [],
-    status: newPose.status || 'published'
-  }]).then((res) => {
-    if (res && res.error) console.warn('Supabase DB Sync (Poses insert) notice:', res.error.message);
+  const payload = toSupabasePosePayload(newPose);
+  supabase.from('snap_poses').upsert([payload], { onConflict: 'id' }).then((res) => {
+    if (res && res.error) console.warn('Supabase DB Sync (Poses upsert) notice:', res.error.message);
   });
 
   return updated;
@@ -176,20 +190,9 @@ export function addPosesBulkDB(newPoses: Pose[]): Pose[] {
   const current = getPosesDB();
   const newIds = new Set(newPoses.map(p => p.id));
   const updated = [...newPoses, ...current.filter(p => !newIds.has(p.id))];
-  savePosesDB(updated);
+  savePosesDB(updated, true);
 
-  const payload = newPoses.map(p => ({
-    id: p.id,
-    title: p.title,
-    image_url: p.image_url,
-    instructions: p.instructions || '',
-    subjects: p.subjects || [],
-    shoot_types: p.shoot_types || [],
-    events: p.events || [],
-    tags: p.tags || [],
-    status: p.status || 'published'
-  }));
-
+  const payload = newPoses.map(toSupabasePosePayload);
   supabase.from('snap_poses').upsert(payload, { onConflict: 'id' }).then((res) => {
     if (res && res.error) console.warn('Supabase DB Sync (Poses bulk insert) notice:', res.error.message);
   });
@@ -200,12 +203,17 @@ export function addPosesBulkDB(newPoses: Pose[]): Pose[] {
 export function updatePoseDB(id: string, partial: Partial<Pose>): Pose[] {
   invalidateCloudCache('poses');
   const current = getPosesDB();
-  const updated = current.map(p => p.id === id ? { ...p, ...partial, updated_at: new Date().toISOString() } : p);
-  savePosesDB(updated);
+  const existing = current.find(p => p.id === id);
+  const updatedPose = existing ? { ...existing, ...partial, updated_at: new Date().toISOString() } : null;
+  const updated = current.map(p => p.id === id ? (updatedPose || { ...p, ...partial }) : p);
+  savePosesDB(updated, true);
 
-  supabase.from('snap_poses').update(partial).eq('id', id).then((res) => {
-    if (res && res.error) console.warn('Supabase DB Sync (Poses update) notice:', res.error.message);
-  });
+  if (updatedPose) {
+    const payload = toSupabasePosePayload(updatedPose);
+    supabase.from('snap_poses').upsert([payload], { onConflict: 'id' }).then((res) => {
+      if (res && res.error) console.warn('Supabase DB Sync (Poses update) notice:', res.error.message);
+    });
+  }
 
   return updated;
 }
@@ -217,9 +225,10 @@ export function updatePosesBulkDB(ids: string[], partial: Partial<Pose>): Pose[]
   const current = getPosesDB();
   const now = new Date().toISOString();
   const updated = current.map(p => idSet.has(p.id) ? { ...p, ...partial, updated_at: now } : p);
-  savePosesDB(updated);
+  savePosesDB(updated, true);
 
-  supabase.from('snap_poses').update(partial).in('id', ids).then((res) => {
+  const payload = updated.filter(p => idSet.has(p.id)).map(toSupabasePosePayload);
+  supabase.from('snap_poses').upsert(payload, { onConflict: 'id' }).then((res) => {
     if (res && res.error) console.warn('Supabase DB Sync (Poses bulk update) notice:', res.error.message);
   });
 
@@ -692,19 +701,69 @@ export async function fetchPosesCloud(forceRefresh = false): Promise<Pose[]> {
       // Merge cloud and local poses by ID so local poses are never lost
       const local = getPosesDB();
       const map = new Map<string, Pose>();
-      mapped.forEach(p => map.set(p.id, p));
+      // Populate local poses first
       local.forEach(p => {
-        if (!map.has(p.id) && !deletedIds.has(p.id)) {
+        if (!deletedIds.has(p.id)) {
           map.set(p.id, p);
         }
       });
+      // Cloud poses take priority and overwrite local with latest updates from other devices!
+      mapped.forEach(p => map.set(p.id, p));
+
       const merged = Array.from(map.values());
-      savePosesDB(merged);
+      savePosesDB(merged, false);
       return merged;
     } catch {
       return getPosesDB();
     }
   }, forceRefresh);
+}
+
+export async function syncLocalPosesToCloud(): Promise<number> {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const local = getPosesDB();
+    if (!local || local.length === 0) return 0;
+    const deletedIds = getDeletedPoseIds();
+    const toSync = local.filter(p => !deletedIds.has(p.id) && !p.id.startsWith('mock_'));
+    if (toSync.length === 0) return 0;
+
+    const payload = toSync.map(toSupabasePosePayload);
+    const { error } = await supabase.from('snap_poses').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.warn('Sync local poses to cloud notice:', error.message);
+      return 0;
+    }
+    invalidateCloudCache('poses');
+    return payload.length;
+  } catch (e) {
+    console.error('Failed to sync poses to cloud:', e);
+    return 0;
+  }
+}
+
+export function subscribeToPosesChanges(onUpdate: (poses: Pose[]) => void): () => void {
+  try {
+    const channelName = `snap_poses_rt_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'snap_poses' },
+        async () => {
+          invalidateCloudCache('poses');
+          const latest = await fetchPosesCloud(true);
+          onUpdate(latest);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  } catch {
+    return () => {};
+  }
 }
 
 export async function fetchShotListCloud(forceRefresh = false): Promise<ShotListItem[]> {

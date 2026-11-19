@@ -10,6 +10,8 @@ import {
   deletePoseDB, 
   deletePosesBulkDB, 
   invalidateCloudCache,
+  syncLocalPosesToCloud,
+  subscribeToPosesChanges,
   DEMO_POSE_IDS 
 } from '@/lib/poses-db-helpers';
 import { SUBJECTS, EVENTS, getSubjectColor, getEventColor } from '@/lib/constants';
@@ -155,7 +157,9 @@ export default function AdminPoses() {
 
   const handleManualSync = async () => {
     setSyncing(true);
-    const cloudPoses = await fetchPosesCloud();
+    invalidateCloudCache('poses');
+    await syncLocalPosesToCloud();
+    const cloudPoses = await fetchPosesCloud(true);
     if (cloudPoses) {
       setPoses(cloudPoses);
     }
@@ -164,11 +168,29 @@ export default function AdminPoses() {
 
   useEffect(() => {
     setPoses(getPosesDB());
-    fetchPosesCloud().then(cloudPoses => {
+    
+    // Auto-sync any unsynced local poses up to Supabase cloud
+    syncLocalPosesToCloud().then(count => {
+      if (count > 0) {
+        console.log(`Synced ${count} local poses to Supabase.`);
+      }
+    });
+
+    fetchPosesCloud(true).then(cloudPoses => {
       if (cloudPoses) {
         setPoses(cloudPoses);
       }
     }).catch(() => {});
+
+    const unsubscribe = subscribeToPosesChanges((latest) => {
+      if (latest && latest.length > 0) {
+        setPoses(latest);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Filtering
