@@ -667,13 +667,13 @@ export async function fetchPosesCloud(forceRefresh = false): Promise<Pose[]> {
         .from('snap_poses')
         .select('id, title, image_url, instructions, subjects, shoot_types, events, tags, status, created_at')
         .order('created_at', { ascending: false });
-      if (error) {
-        console.warn('Supabase DB Sync (Poses fetch) notice:', error.message);
+      if (error || !data || data.length === 0) {
+        if (error) console.warn('Supabase DB Sync (Poses fetch) notice:', error.message);
         return getPosesDB();
       }
 
       const deletedIds = getDeletedPoseIds();
-      const mapped: Pose[] = (data || [])
+      const mapped: Pose[] = data
         .filter((d: any) => !deletedIds.has(d.id))
         .map((d: any) => ({
           id: d.id,
@@ -689,8 +689,18 @@ export async function fetchPosesCloud(forceRefresh = false): Promise<Pose[]> {
           updated_at: d.created_at || new Date().toISOString()
         }));
 
-      savePosesDB(mapped);
-      return mapped;
+      // Merge cloud and local poses by ID so local poses are never lost
+      const local = getPosesDB();
+      const map = new Map<string, Pose>();
+      mapped.forEach(p => map.set(p.id, p));
+      local.forEach(p => {
+        if (!map.has(p.id) && !deletedIds.has(p.id)) {
+          map.set(p.id, p);
+        }
+      });
+      const merged = Array.from(map.values());
+      savePosesDB(merged);
+      return merged;
     } catch {
       return getPosesDB();
     }

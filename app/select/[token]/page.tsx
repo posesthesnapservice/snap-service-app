@@ -12,6 +12,7 @@ import {
   getClientSelectionsDB
 } from '@/lib/client-selection-helpers';
 import { getPosesDB, fetchPosesCloud, getTrendingReelsDB, fetchTrendingReelsCloud } from '@/lib/poses-db-helpers';
+import { mockPoses, mockTrendingReels } from '@/lib/mock-data';
 import { formatOptimizedVideoUrl, formatOptimizedCoverUrl } from '@/lib/cloudinary';
 import { Pose, TrendingReel, ClientSelectionSession } from '@/lib/types';
 import { SUBJECT_COLORS, getSubjectColor, getEventColor } from '@/lib/constants';
@@ -94,22 +95,34 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
         }
         if (s.client_notes) setClientNotes(s.client_notes);
         if (s.status === 'submitted') setSubmittedSuccess(true);
-        if (s.event_type && s.event_type !== 'All' && s.event_type !== 'General') {
-          setEventFilter(s.event_type);
-        }
+        // Default event filter to 'All' so client sees full wedding library
       }
 
-      // Load poses & reels
-      const localPoses = getPosesDB().filter(p => p.status !== 'hidden');
+      // Load poses & reels with resilient fallback
+      let localPoses = getPosesDB().filter(p => p.status !== 'hidden');
+      if (localPoses.length === 0) {
+        localPoses = mockPoses.filter(p => p.status !== 'hidden');
+      }
       setPoses(localPoses);
+
       fetchPosesCloud().then(p => {
-        if (p) setPoses(p.filter(item => item.status !== 'hidden'));
+        if (p && p.length > 0) {
+          const visible = p.filter(item => item.status !== 'hidden');
+          if (visible.length > 0) setPoses(visible);
+        }
       });
 
-      const localReels = getTrendingReelsDB().filter(r => r.status !== 'hidden');
+      let localReels = getTrendingReelsDB().filter(r => r.status !== 'hidden');
+      if (localReels.length === 0) {
+        localReels = mockTrendingReels.filter(r => r.status !== 'hidden');
+      }
       setReels(localReels);
+
       fetchTrendingReelsCloud().then(r => {
-        if (r) setReels(r.filter(item => item.status !== 'hidden'));
+        if (r && r.length > 0) {
+          const visible = r.filter(item => item.status !== 'hidden');
+          if (visible.length > 0) setReels(visible);
+        }
       });
 
       setLoading(false);
@@ -177,21 +190,45 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
   // Filtered poses
   const filteredPoses = poses.filter(p => {
     if (search) {
-      const matchTitle = p.title.toLowerCase().includes(search.toLowerCase());
-      const matchInst = (p.instructions || '').toLowerCase().includes(search.toLowerCase());
-      if (!matchTitle && !matchInst) return false;
+      const q = search.toLowerCase();
+      const matchTitle = (p.title || '').toLowerCase().includes(q);
+      const matchInst = (p.instructions || '').toLowerCase().includes(q);
+      const matchTags = (p.tags || []).some(t => t.toLowerCase().includes(q));
+      if (!matchTitle && !matchInst && !matchTags) return false;
     }
-    if (subjectFilter !== 'All' && !p.subjects?.includes(subjectFilter)) return false;
-    if (eventFilter !== 'All' && !p.events?.includes(eventFilter)) return false;
+    if (subjectFilter !== 'All') {
+      const poseSubjects = (p.subjects || []).map(s => s.toLowerCase());
+      if (!poseSubjects.includes(subjectFilter.toLowerCase())) return false;
+    }
+    if (eventFilter !== 'All') {
+      const poseEvents = (p.events || []).map(e => e.toLowerCase());
+      const filterLower = eventFilter.toLowerCase();
+      const matchesEvent = poseEvents.includes(filterLower) || 
+                           poseEvents.includes('all') || 
+                           poseEvents.includes('general') ||
+                           poseEvents.length === 0;
+      if (!matchesEvent) return false;
+    }
     return true;
   });
 
   // Filtered reels
   const filteredReels = reels.filter(r => {
-    if (search && !r.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const matchTitle = (r.title || '').toLowerCase().includes(q);
+      const matchDesc = (r.description || '').toLowerCase().includes(q);
+      if (!matchTitle && !matchDesc) return false;
+    }
     if (eventFilter !== 'All') {
-      const reelEvents = (r as any).events || [r.event];
-      if (!reelEvents.includes(eventFilter)) return false;
+      const rawEvents = (r as any).events || [r.event];
+      const reelEvents = (rawEvents || []).map((e: string) => (e || '').toLowerCase());
+      const filterLower = eventFilter.toLowerCase();
+      const matchesEvent = reelEvents.includes(filterLower) || 
+                           reelEvents.includes('all') || 
+                           reelEvents.includes('general') ||
+                           reelEvents.length === 0;
+      if (!matchesEvent) return false;
     }
     return true;
   });
@@ -505,6 +542,7 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
             {EVENT_FILTERS.map(ev => {
               const isSelected = eventFilter === ev;
+              const isClientEvent = !!session?.event_type && ev.toLowerCase() === session.event_type.toLowerCase() && ev !== 'All';
               return (
                 <button
                   key={ev}
@@ -517,12 +555,12 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
                     flexShrink: 0,
-                    backgroundColor: isSelected ? 'rgba(212,175,55,0.2)' : 'transparent',
-                    color: isSelected ? '#D4AF37' : '#777',
-                    border: isSelected ? '1px solid #D4AF37' : '1px solid rgba(255,255,255,0.06)',
+                    backgroundColor: isSelected ? 'rgba(212,175,55,0.2)' : isClientEvent ? 'rgba(212,175,55,0.06)' : 'transparent',
+                    color: isSelected ? '#D4AF37' : isClientEvent ? '#e2d4a8' : '#777',
+                    border: isSelected ? '1.5px solid #D4AF37' : isClientEvent ? '1px dashed rgba(212,175,55,0.4)' : '1px solid rgba(255,255,255,0.06)',
                   }}
                 >
-                  {ev}
+                  {ev}{isClientEvent ? ' (Your Event)' : ''}
                 </button>
               );
             })}
@@ -533,9 +571,45 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
         {activeTab === 'poses' && (
           <div>
             {filteredPoses.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#777' }}>
-                <div style={{ fontSize: '36px', marginBottom: '10px' }}>📷</div>
-                <p>No poses matching this filter.</p>
+              <div style={{ textAlign: 'center', padding: '50px 20px', color: '#aaa', backgroundColor: '#12121a', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.06)', margin: '20px 0' }}>
+                <div style={{ fontSize: '42px', marginBottom: '12px' }}>📷</div>
+                <h3 style={{ color: '#fff', fontSize: '16px', fontWeight: 'bold', margin: '0 0 6px 0' }}>
+                  {eventFilter !== 'All' 
+                    ? `No poses found under "${eventFilter}"` 
+                    : subjectFilter !== 'All' 
+                      ? `No poses found under "${subjectFilter}"` 
+                      : search 
+                        ? `No poses matching "${search}"` 
+                        : 'No poses available yet'}
+                </h3>
+                <p style={{ fontSize: '13px', color: '#888', margin: '0 0 18px 0', maxWidth: '440px', marginInline: 'auto', lineHeight: '1.5' }}>
+                  {eventFilter !== 'All' || subjectFilter !== 'All' || search
+                    ? 'Filters ko reset karein taake studio ki baqi tamam wedding poses dekh saken aur pasand select kar saken.'
+                    : 'Studio team jald hi poses upload kar degi.'}
+                </p>
+                {(eventFilter !== 'All' || subjectFilter !== 'All' || search) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEventFilter('All');
+                      setSubjectFilter('All');
+                      setSearch('');
+                    }}
+                    style={{
+                      backgroundColor: '#D4AF37',
+                      color: '#000',
+                      border: 'none',
+                      padding: '10px 22px',
+                      borderRadius: '8px',
+                      fontWeight: 'bold',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 15px rgba(212,175,55,0.3)'
+                    }}
+                  >
+                    View All Wedding Poses ({poses.length}) →
+                  </button>
+                )}
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '14px' }}>
@@ -625,9 +699,42 @@ export default function ClientSelectionPage({ params }: { params: Promise<{ toke
         {activeTab === 'reels' && (
           <div>
             {filteredReels.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#777' }}>
-                <div style={{ fontSize: '36px', marginBottom: '10px' }}>🎬</div>
-                <p>No reels matching this filter.</p>
+              <div style={{ textAlign: 'center', padding: '50px 20px', color: '#aaa', backgroundColor: '#12121a', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.06)', margin: '20px 0' }}>
+                <div style={{ fontSize: '42px', marginBottom: '12px' }}>🎬</div>
+                <h3 style={{ color: '#fff', fontSize: '16px', fontWeight: 'bold', margin: '0 0 6px 0' }}>
+                  {eventFilter !== 'All' 
+                    ? `No reels found under "${eventFilter}"` 
+                    : search 
+                      ? `No reels matching "${search}"` 
+                      : 'No trending reels available yet'}
+                </h3>
+                <p style={{ fontSize: '13px', color: '#888', margin: '0 0 18px 0', maxWidth: '440px', marginInline: 'auto', lineHeight: '1.5' }}>
+                  {eventFilter !== 'All' || search
+                    ? 'Filters ko reset karein taake studio ki baqi tamam trending cinematic reels dekh saken.'
+                    : 'Studio team jald hi trending reels upload kar degi.'}
+                </p>
+                {(eventFilter !== 'All' || search) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEventFilter('All');
+                      setSearch('');
+                    }}
+                    style={{
+                      backgroundColor: '#D4AF37',
+                      color: '#000',
+                      border: 'none',
+                      padding: '10px 22px',
+                      borderRadius: '8px',
+                      fontWeight: 'bold',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 15px rgba(212,175,55,0.3)'
+                    }}
+                  >
+                    View All Reels ({reels.length}) →
+                  </button>
+                )}
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '14px' }}>
